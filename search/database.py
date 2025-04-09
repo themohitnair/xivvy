@@ -43,6 +43,8 @@ class Database:
                 "id": entry.metadata.id,
                 "abstract": entry.metadata.abstract,
                 "title": entry.metadata.title,
+                "authors": entry.metadata.authors,
+                "date_updated": entry.metadata.date_updated,
             }
             points.append(
                 models.PointStruct(

@@ -2,7 +2,7 @@ from fastembed.embedding import TextEmbedding
 from models import PaperMetadata, PaperEntry
 from typing import List
 
-client = TextEmbedding(model_name="BAAI/bge-small-en-v1.5", threads=4, parallel=2)
+client = TextEmbedding(model_name="BAAI/bge-small-en-v1.5", threads=8, parallel=2)
 
 
 class Embedder:

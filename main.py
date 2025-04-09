@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from search.database import Database
 from search.embed import Embedder
 from fastapi.responses import JSONResponse
+from datetime import datetime
 
 import logging.config
 from config import LOG_CONFIG
@@ -15,6 +16,7 @@ async def lifespan(app: FastAPI):
     app.state.embedder = Embedder()
     app.state.db = Database()
     app.state.logger = logging.getLogger(__name__)
+    app.state.last_updated = datetime.utcnow()
 
     await app.state.db.initialize()
     app.state.logger.info("App initialized...")

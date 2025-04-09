@@ -6,6 +6,7 @@ class PaperMetadata(BaseModel):
     id: str
     title: str
     abstract: str
+    authors: List[str]
 
 
 class PaperEntry(BaseModel):

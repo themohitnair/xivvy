@@ -10,7 +10,7 @@ from search.database import Database
 
 async def load_and_upsert() -> None:
     logging.config.dictConfig(LOG_CONFIG)
-    logger = logging.getLogger("load_dataset")
+    logger = logging.getLogger(__name__)
 
     parser = Parser()
     embedder = Embedder()
