@@ -5,3 +5,4 @@ __pycache__
 data
 kaggle
 qdrant_storage
+*.txt
