@@ -2,8 +2,8 @@ from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from search.database import Database
 from search.embed import Embedder
-from fastapi.responses import JSONResponse
-from models import SearchResult
+from search.metadata import Lucy
+from models import SemSearchResult
 from typing import List
 
 import logging.config
@@ -30,7 +30,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 
-@app.get("/search/", response_model=List[SearchResult])
+@app.get("/search/", response_model=List[SemSearchResult])
 async def search(query: str):
     logger = app.state.logger
     embedder = app.state.embedder
@@ -42,7 +42,11 @@ async def search(query: str):
 
     results = await database.search(query_vector, 10)
 
-    return JSONResponse(content={"results": [r.dict() for r in results]})
+    metadata_fetcher = Lucy(results)
+
+    enriched_results = await metadata_fetcher.get_semantic_results()
+
+    return enriched_results
 
 
 if __name__ == "__main__":
