@@ -1,13 +1,13 @@
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
+from typing import List
+import logging.config
+
 from search.database import Database
 from search.embed import Embedder
 from search.metadata import Lucy
-from models import SemSearchResult
-from typing import List
-
-import logging.config
 from config import LOG_CONFIG
+from models import SemSearchResult
 
 logging.config.dictConfig(LOG_CONFIG)
 

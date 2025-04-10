@@ -1,11 +1,12 @@
 import json
-from typing import AsyncIterator, List, Optional
 from models import PaperMetadata
 import aiofiles
 from pydantic import ValidationError
 import logging.config
 from datetime import datetime
+
 from config import LOG_CONFIG, ARXIV_JSON_METADATASET_FILE, BATCH_SIZE
+from typing import AsyncIterator, List, Optional
 
 logging.config.dictConfig(LOG_CONFIG)
 

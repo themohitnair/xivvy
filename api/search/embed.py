@@ -1,7 +1,8 @@
 from fastembed.embedding import TextEmbedding
-from models import PaperMetadata, PaperEntry
 from typing import List
 import asyncio
+
+from models import PaperMetadata, PaperEntry
 from config import EMBEDDING_MODEL, NUMBER_OF_PARALLEL_PROCESSES, NUMBER_OF_THREADS
 
 client = TextEmbedding(

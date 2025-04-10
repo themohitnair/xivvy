@@ -5,10 +5,10 @@ from datetime import datetime
 from typing import Optional
 
 from config import LOG_CONFIG
-from search.parse import Parser
-from search.embed import Embedder
-from search.database import Database
-from weekly import save_last_updated
+from api.search.parse import Parser
+from api.search.embed import Embedder
+from api.search.database import Database
+from utils import save_last_updated
 
 
 async def startup_loading() -> None:

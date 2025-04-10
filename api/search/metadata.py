@@ -2,6 +2,7 @@ import aiohttp
 import asyncio
 import xml.etree.ElementTree as ET
 from typing import List
+
 from models import SearchResult, SemSearchResult
 
 

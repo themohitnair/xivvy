@@ -5,4 +5,4 @@ __pycache__
 data
 kaggle
 qdrant_storage
-*.txt
+last_updated.txt

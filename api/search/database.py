@@ -1,7 +1,8 @@
 from qdrant_client import AsyncQdrantClient, models
-from models import PaperEntry, SearchResult
 from typing import List, Optional
 import hashlib
+
+from models import PaperEntry, SearchResult
 from config import QDRANT_HOST, QDRANT_PORT
 
 client = AsyncQdrantClient(host=QDRANT_HOST, port=QDRANT_PORT)
