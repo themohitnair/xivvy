@@ -2,8 +2,9 @@ from qdrant_client import AsyncQdrantClient, models
 from models import PaperEntry, SearchResult
 from typing import List, Optional
 import hashlib
+from config import HOST, PORT
 
-client = AsyncQdrantClient(host="localhost", port="6333")
+client = AsyncQdrantClient(host=HOST, port=PORT)
 
 
 class Database:

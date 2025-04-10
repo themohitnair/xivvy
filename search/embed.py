@@ -2,8 +2,13 @@ from fastembed.embedding import TextEmbedding
 from models import PaperMetadata, PaperEntry
 from typing import List
 import asyncio
+from config import EMBEDDING_MODEL, NUMBER_OF_PARALLEL_PROCESSES, NUMBER_OF_THREADS
 
-client = TextEmbedding(model_name="BAAI/bge-small-en-v1.5", threads=12, parallel=1)
+client = TextEmbedding(
+    model_name=EMBEDDING_MODEL,
+    threads=NUMBER_OF_THREADS,
+    parallel=NUMBER_OF_PARALLEL_PROCESSES,
+)
 
 
 class Embedder:

@@ -5,7 +5,7 @@ from typing import List
 from models import SearchResult, SemSearchResult
 
 
-class Lucy:
+class Lucy:  # GothamChess's Wife
     def __init__(self, results: List[SearchResult]):
         self.results = results
         self.base_url = "http://export.arxiv.org/api/query?id_list="

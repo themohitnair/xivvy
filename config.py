@@ -24,3 +24,11 @@ LOG_CONFIG = {
 }
 
 LAST_UPDATED_FILE = "last_updated.txt"
+ARXIV_JSON_METADATASET_FILE = "data/arxiv-metadata-oai-test.json"  # Currently...
+BATCH_SIZE = 64
+KAGGLE_DATASET_NAME = "cornell-university/arxiv"
+EMBEDDING_MODEL = "BAAI/bge-small-en-v1.5"
+NUMBER_OF_THREADS = 12
+NUMBER_OF_PARALLEL_PROCESSES = 1
+QDRANT_HOST = "localhost"
+QDRANT_PORT = 6333
