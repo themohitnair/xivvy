@@ -14,7 +14,7 @@ logging.config.dictConfig(LOG_CONFIG)
 class Parser:
     def __init__(self):
         self.json_file = os.path.join("data", "arxiv-metadata-oai-test.json")
-        self.batch_size = 512
+        self.batch_size = 64
         self.logger = logging.getLogger(__name__)
 
     async def gen_batches(
@@ -40,11 +40,6 @@ class Parser:
                             id=data["id"],
                             abstract=data["abstract"],
                             title=data["title"],
-                            authors=[
-                                f"{first} {last}"
-                                for last, first, _ in data["authors_parsed"]
-                            ],
-                            date_updated=data["update_date"],
                         )
                         batch.append(entry)
 

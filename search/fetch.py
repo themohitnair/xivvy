@@ -2,7 +2,7 @@ import os
 from kaggle.api.kaggle_api_extended import KaggleApi
 
 
-class Benjamin:  # Honoring Levy "GothamChess" Rozman's pet dog
+class Benjamin:  # Levy "GothamChess" Rozman's pet dog
     def __init__(self):
         self.client = KaggleApi()
         self.dataset_name = "cornell-university/arxiv"

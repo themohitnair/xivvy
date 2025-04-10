@@ -4,3 +4,4 @@ __pycache__
 *.json
 data
 kaggle
+qdrant_storage

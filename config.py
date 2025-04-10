@@ -1,5 +1,4 @@
 from dotenv import load_dotenv
-import os
 
 load_dotenv()
 
@@ -24,6 +23,4 @@ LOG_CONFIG = {
     "root": {"level": "INFO", "handlers": ["console"]},
 }
 
-DATABASE_USER = os.getenv("DATABASE_USER")
-DATABASE_PASSWORD = os.getenv("DATABASE_PASSWORD")
-DATABASE_NAME = os.getenv("DATABASE_NAME")
+LAST_UPDATED_FILE = "last_updated.txt"
