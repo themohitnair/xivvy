@@ -5,9 +5,9 @@ from datetime import datetime
 from typing import Optional
 
 from config import LOG_CONFIG
-from api.search.parse import Parser
-from api.search.embed import Embedder
-from api.search.database import Database
+from search.parse import Parser
+from search.embed import Embedder
+from search.database import Database
 from utils import save_last_updated
 
 
