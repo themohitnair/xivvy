@@ -1,12 +1,11 @@
-import json
+import orjson
 from models import PaperMetadata
 import aiofiles
 from pydantic import ValidationError
 import logging.config
-from datetime import datetime
 
 from config import LOG_CONFIG, ARXIV_JSON_METADATASET_FILE, BATCH_SIZE
-from typing import AsyncIterator, List, Optional
+from typing import AsyncIterator, List
 
 logging.config.dictConfig(LOG_CONFIG)
 
@@ -17,24 +16,14 @@ class Parser:
         self.batch_size = BATCH_SIZE
         self.logger = logging.getLogger(__name__)
 
-    async def gen_batches(
-        self, date: Optional[datetime] = None
-    ) -> AsyncIterator[List[PaperMetadata]]:
+    async def gen_batches(self) -> AsyncIterator[List[PaperMetadata]]:
         try:
             batch: List[PaperMetadata] = []
 
             async with aiofiles.open(self.json_file, mode="r") as f:
                 async for line in f:
                     try:
-                        data = json.loads(line)
-
-                        if date:
-                            updated_at = data["update_date"]
-                            if not updated_at:
-                                continue
-                            update_date = datetime.strptime(updated_at, "%Y-%m-%d")
-                            if update_date <= date:
-                                continue
+                        data = orjson.loads(line)
 
                         entry = PaperMetadata(
                             id=data["id"],

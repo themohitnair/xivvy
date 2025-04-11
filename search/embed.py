@@ -16,11 +16,17 @@ class Embedder:
     def __init__(self):
         self.embedder = client
 
+    def truncate_text(self, text: str, max_chars: int = 512):
+        return text[:max_chars]
+
     async def embed_batch(self, batch: List[PaperMetadata]) -> List[PaperEntry]:
         return await asyncio.to_thread(self._embed_sync, batch)
 
     def _embed_sync(self, batch: List[PaperMetadata]) -> List[PaperEntry]:
-        inputs = [f"{paper.title.strip()}\n{paper.abstract.strip()}" for paper in batch]
+        inputs = [
+            f"{paper.title.strip()}\n{self.truncate_text(text=paper.abstract.strip(), max_chars=512)}"
+            for paper in batch
+        ]
         embeddings = list(self.embedder.embed(inputs))
 
         return [

@@ -36,15 +36,16 @@ async def search(query: str):
     embedder = app.state.embedder
     database = app.state.db
 
-    logger.info(f"Vector Count: {await database.count_vectors()}")
-
     query_vector = embedder.embed_query(query)
+    logger.info("Query embedded!")
 
     results = await database.search(query_vector, 10)
+    logger.info("Qdrant Results received!")
 
     metadata_fetcher = Lucy(results)
 
     enriched_results = await metadata_fetcher.get_semantic_results()
+    logger.info("Results enriched with arXiv data.")
 
     return enriched_results
 

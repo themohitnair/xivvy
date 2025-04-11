@@ -80,6 +80,9 @@ async def startup_loading() -> None:
         logger.info(
             f"✅ Index optimization complete in {time.perf_counter() - start_index:.2f}s"
         )
+        count = await db.count_vectors()
+
+        logger.info(f"{count} vectors are in the Database.")
 
     total_time = time.perf_counter() - start_loading
     logger.info(

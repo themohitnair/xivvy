@@ -1,5 +1,5 @@
 from qdrant_client import AsyncQdrantClient, models
-from typing import List, Optional
+from typing import List
 import hashlib
 
 from models import PaperEntry, SearchResult
@@ -31,6 +31,11 @@ class Database:
                 optimizers_config=models.OptimizersConfigDiff(
                     indexing_threshold=0,
                     memmap_threshold=5000,
+                ),
+                quantization_config=models.ScalarQuantization(
+                    scalar=models.ScalarQuantizationConfig(
+                        type=models.ScalarType.INT8, quantile=0.99, always_ram=False
+                    )
                 ),
             )
 
@@ -69,7 +74,6 @@ class Database:
         self,
         query_vector: List[float],
         top_k: int = 10,
-        filter: Optional[models.Filter] = None,
     ) -> List[SearchResult]:
         results = await self.client.search(
             collection_name=self.collection_name,
@@ -100,4 +104,4 @@ class Database:
 
     async def count_vectors(self) -> int:
         count = await self.client.count(self.collection_name)
-        return count
+        return count.count
