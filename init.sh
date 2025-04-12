@@ -2,6 +2,8 @@
 
 set -euo pipefail
 
+cd "$(dirname "$0")"
+
 echo "Creating virtual environment using uv."
 /usr/bin/uv venv --python=3.13
 

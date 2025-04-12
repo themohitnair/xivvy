@@ -6,7 +6,7 @@ A Semantic Search Engine for arXiv papers.
 
 ## To run xivvy locally
 
-First, clone the repository to **your home directory** (if you wish to do so elsewhere, you might have to tweak the systemd service/timer configs as well as the other integral bash scripts to get xivvy to work).
+First, clone the repository:
 
 ```bash
 git clone https://github.com/themohitnair/xivvy.git ~/xivvy
@@ -19,7 +19,7 @@ xivvy uses [uv](https://github.com/astral-sh/uv) for dependency management along
 * `fastapi`
 * `orjson`
 
-You can run the init.sh script-:
+To create a virtual environment within the project directory and install all dependencies in `requirements.txt`, you can run the init.sh script:
 
 ```bash
 #!/usr/bin/bash
@@ -37,8 +37,6 @@ uv pip install -r requirements.txt
 
 echo "Your environment is ready to cook!"
 ```
-
--to create a virtual environment within the project directory and install all dependencies in `requirements.txt`.
 
 The repository root must contain a directory called `kaggle`, within which there must be your `kaggle.json` file containing the following:
 
@@ -65,4 +63,4 @@ You can use the following command to find the qdrant docker instance (with or wi
 sudo docker ps
 ```
 
-After this, you must add a cronjob to run `./upd.sh` weekly (in the given sequence, assuming you want all the arXiv papers to be in scope for your search engine). In the terminal within your project.
+After this, you must add a cronjob to run `./upd.sh` weekly (assuming you want all the arXiv papers to be in scope for your search engine, even the ones appended regularly to it).

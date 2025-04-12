@@ -2,6 +2,9 @@ from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from typing import List
 import logging.config
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 from search.database import Database
 from search.embed import Embedder
@@ -10,6 +13,8 @@ from config import LOG_CONFIG
 from models import SemSearchResult
 
 logging.config.dictConfig(LOG_CONFIG)
+
+limiter = Limiter(key_func=get_remote_address)
 
 
 @asynccontextmanager
@@ -29,8 +34,12 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 
 @app.get("/search/", response_model=List[SemSearchResult])
+@limiter.limit("5/min")
 async def search(query: str):
     logger = app.state.logger
     embedder = app.state.embedder

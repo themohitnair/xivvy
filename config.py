@@ -25,7 +25,8 @@ LOG_CONFIG = {
     "root": {"level": "INFO", "handlers": ["console"]},
 }
 
-ARXIV_JSON_METADATASET_FILE = str(DATA_DIR / "data/arxiv-metadata-oai-snapshot.json")
+ARXIV_JSON_METADATASET_FILE = str(DATA_DIR / "arxiv-metadata-oai-snapshot.json")
+KAGGLE_CONFIG_DIR = str(PROJECT_ROOT / "kaggle")
 BATCH_SIZE = 4
 LAST_PAPER_PROCESSED_FILE = str(PROJECT_ROOT / "last_paper_processed.txt")
 IF_OLD_PAPERS_PROCESSED_FILE = str(PROJECT_ROOT / "if_old_papers_processed.txt")
