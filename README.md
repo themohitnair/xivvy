@@ -42,20 +42,18 @@ The repository root must contain a directory called `kaggle`, within which there
 
 ```json
 {
-  "username":<Your Kaggle Username>,
-  "key":<Your Kaggle API Key>
+  "username":"<Your Kaggle Username>",
+  "key":"<Your Kaggle API Key>"
 }
 ```
 
 You can obtain this JSON file as it is from this [link](https://www.kaggle.com/settings) under the API section.
 
-Use this command (with or without sudo, depending on your machine) to create a qdrant instance at port 6333:
+Use this command (with or without sudo, depending on your machine) to start a docker instance for the qdrant database and add the said directory `qdrant_storage` with the access port 6333:
 
 ```bash
 sudo docker run -d -p 6333:6333 -v $(pwd)/qdrant_storage:/qdrant/storage qdrant/qdrant
 ```
-
-This command starts a docker instance for the qdrant database and adds the said directory `qdrant_storage` with the access port 6333.
 
 You can use the following command to find the qdrant docker instance (with or without sudo, depending on your machine):
 
@@ -64,3 +62,22 @@ sudo docker ps
 ```
 
 After this, you must add a cronjob to run `./upd.sh` weekly (assuming you want all the arXiv papers to be in scope for your search engine, even the ones appended regularly to it).
+
+Add appropriate permissions to `upd.sh`:
+
+```bash
+chmod +x upd.sh
+```
+
+Now, add the cronjob:
+
+```bash
+crontab -e
+```
+
+Add this line to the crontab:
+**Note:** Replace /path/to/upd.sh with the actual absolute path to the upd.sh file within the clone directory. It is advisable to keep the `upd.log` in a handy location.
+
+```bash
+* * * * * /path/to/upd.sh >> path/to/upd.log 2>&1
+```
