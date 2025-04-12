@@ -2,9 +2,13 @@ from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from typing import List
 import logging.config
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
-from slowapi.errors import RateLimitExceeded
+
+# from slowapi import Limiter, _rate_limit_exceeded_handler
+# from slowapi.util import get_remote_address
+# from slowapi.errors import RateLimitExceeded
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import HTMLResponse
+from fastapi import Request
 
 from search.database import Database
 from search.embed import Embedder
@@ -14,7 +18,7 @@ from models import SemSearchResult
 
 logging.config.dictConfig(LOG_CONFIG)
 
-limiter = Limiter(key_func=get_remote_address)
+# limiter = Limiter(key_func=get_remote_address)
 
 
 @asynccontextmanager
@@ -34,12 +38,20 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+app.mount("/static", StaticFiles(directory="static"), name="static")
+# app.state.limiter = limiter
+# app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+@app.get("/", response_class=HTMLResponse)
+async def root(request: Request):
+    with open("app/index.html", "r", encoding="utf-8") as f:
+        return HTMLResponse(content=f.read())
 
 
 @app.get("/search/", response_model=List[SemSearchResult])
-@limiter.limit("5/min")
+# @limiter.limit("5/min")
 async def search(query: str):
     logger = app.state.logger
     embedder = app.state.embedder
@@ -62,4 +74,4 @@ async def search(query: str):
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app="main:app", port=8000, host="localhost", reload=True)
+    uvicorn.run(app=app, port=8000, host="localhost")

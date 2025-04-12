@@ -4,6 +4,19 @@ A Semantic Search Engine for arXiv papers.
 
 **Note:** The search engine explicitly ignores updations to papers which are already added. The routine script just adds new papers (the IDs that have not been added yet).
 
+Before you run xivvy locally, please pay heed to the following points:
+
+- It would take a considerable amount of time to embed all the papers in the dataset, about 20 hours, considering projections. There are 2.7 million papers in the Kaggle dataset, so it's warranted to take a while to embed the metadata
+- Docker is a prerequisite for your system. Docker is required for running the Qdrant instance which is the main component of Semantic Search.
+- This was first meant to be a web project, to make it free for all as a web app. But it has to be rolled out like this until I find a hosting solution. Sorry, and thank you.
+- Executing `upd.sh` might make your fans whirr.
+- You must have an internet connection to download the Kaggle dataset, which is now standing at about 4.6 GB. Have some patience and an internet connection. (Trust me, it gets better after the first run to embed all papers).
+- Paper metadata is directly sourced from the public [kaggle metadataset for arXiv](https://www.kaggle.com/datasets/Cornell-University/arxiv). shoutout to Cornell University for the dataset.
+
+## First look
+
+![Searched for some random thing](assets/xivvy.png)
+
 ## To run xivvy locally
 
 First, clone the repository:
@@ -61,7 +74,7 @@ You can use the following command to find the qdrant docker instance (with or wi
 sudo docker ps
 ```
 
-After this, you must add a cronjob to run `./upd.sh` weekly (assuming you want all the arXiv papers to be in scope for your search engine, even the ones appended regularly to it).
+After this, you must add a cronjob to run `./upd.sh` weekly (assuming you want all the arXiv papers to be in scope for your search engine, even the ones appended regularly to it). You can change the interval as you'd like to, based on how frequently you want to update your database. Refer to [cronitor](https://crontab.guru/) to edit the interval section in the crontab.
 
 Add appropriate permissions to `upd.sh`:
 
@@ -76,8 +89,14 @@ crontab -e
 ```
 
 Add this line to the crontab:
-**Note:** Replace /path/to/upd.sh with the actual absolute path to the upd.sh file within the clone directory. It is advisable to keep the `upd.log` in a handy location.
+**Note:** Replace /path/to/upd.sh with the actual absolute path to the upd.sh file within the clone directory. It is advisable to keep the `upd.log` in a handy location (again, with an absolute path).
 
 ```bash
-* * * * * /path/to/upd.sh >> path/to/upd.log 2>&1
+* * * * * /path/to/upd.sh >> /path/to/upd.log 2>&1
+```
+
+You can now execute the `main.py` file as follows:
+
+```python
+python main.py
 ```
