@@ -5,4 +5,5 @@ __pycache__
 data
 kaggle
 qdrant_storage
-last_updated.txt
+last_paper_processed.txt
+if_old_papers_processed.txt

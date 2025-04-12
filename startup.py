@@ -1,14 +1,12 @@
 import asyncio
 import logging.config
 import time
-from datetime import datetime
 from typing import Optional
 
 from config import LOG_CONFIG
 from search.parse import Parser
 from search.embed import Embedder
 from search.database import Database
-from utils import save_last_updated
 
 
 async def startup_loading() -> None:
@@ -16,6 +14,10 @@ async def startup_loading() -> None:
     logger = logging.getLogger(__name__)
     embedder = Embedder()
     parser = Parser()
+    await parser.load_last_id()
+    await parser.load_if_old_papers_processed()
+
+    logger.info(f"🔥 Starting from ID: {parser.last_id_processed}")
 
     async with Database() as db:
         logger.info("🚀 Starting pipeline")
@@ -91,7 +93,6 @@ async def startup_loading() -> None:
         f"• ⌛ Total time: {total_time:.2f}s\n"
         f"• ⚡ Avg throughput: {total_papers / total_time:.2f} papers/sec"
     )
-    save_last_updated(datetime.now())
 
 
 def main():
