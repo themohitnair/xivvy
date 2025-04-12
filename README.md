@@ -12,6 +12,7 @@ Before you run xivvy locally, please pay heed to the following points:
 - Executing `upd.sh` might make your fans whirr.
 - You must have an internet connection to download the Kaggle dataset, which is now standing at about 4.6 GB. Have some patience and an internet connection. (Trust me, it gets better after the first run to embed all papers).
 - Paper metadata is directly sourced from the public [kaggle metadataset for arXiv](https://www.kaggle.com/datasets/Cornell-University/arxiv). shoutout to Cornell University for the dataset.
+- The vector database would take no more than 10 GB.
 
 ## First look
 
@@ -27,10 +28,10 @@ git clone https://github.com/themohitnair/xivvy.git ~/xivvy
 
 xivvy uses [uv](https://github.com/astral-sh/uv) for dependency management along with a Python 3.13 interpreter. It is a prerequisite for running the project, among other dependency managers which you may choose to use. The required packages are listed in `requirements.txt`. Notable dependencies include:
 
-* `fastembed`
-* `qdrant-client`
-* `fastapi`
-* `orjson`
+- `fastembed`
+- `qdrant-client`
+- `fastapi`
+- `orjson`
 
 To create a virtual environment within the project directory and install all dependencies in `requirements.txt`, you can run the init.sh script:
 
