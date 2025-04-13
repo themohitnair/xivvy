@@ -33,25 +33,6 @@ xivvy uses [uv](https://github.com/astral-sh/uv) for dependency management along
 - `fastapi`
 - `orjson`
 
-To create a virtual environment within the project directory and install all dependencies in `requirements.txt`, you can run the init.sh script:
-
-```bash
-#!/usr/bin/bash
-
-set -euo pipefail
-
-echo "Creating virtual environment using uv."
-uv venv --python=3.13
-
-echo "Activating virtual environment."
-source .venv/bin/activate
-
-echo "Installing dependencies from requirements.txt."
-uv pip install -r requirements.txt
-
-echo "Your environment is ready to cook!"
-```
-
 The repository root must contain a directory called `kaggle`, within which there must be your `kaggle.json` file containing the following:
 
 ```json
@@ -61,7 +42,7 @@ The repository root must contain a directory called `kaggle`, within which there
 }
 ```
 
-You can obtain this JSON file as it is from this [link](https://www.kaggle.com/settings) under the API section.
+So add the kaggle credentials to the root of the repository within a subdirectory called `kaggle`, in a JSON file called `kaggle.json`. You can obtain this JSON file as it is from this [link](https://www.kaggle.com/settings) under the API section.
 
 Use this command (with or without sudo, depending on your machine) to start a docker instance for the qdrant database and add the said directory `qdrant_storage` with the access port 6333:
 

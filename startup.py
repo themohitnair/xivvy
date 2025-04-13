@@ -7,6 +7,7 @@ from config import LOG_CONFIG
 from search.parse import Parser
 from search.embed import Embedder
 from search.database import Database
+from search.fetch import Benjamin
 
 
 async def startup_loading() -> None:
@@ -96,6 +97,7 @@ async def startup_loading() -> None:
 
 
 def main():
+    Benjamin().download()
     asyncio.run(startup_loading())
 
 

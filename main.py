@@ -66,12 +66,6 @@ async def search(query: str):
     metadata_fetcher = Lucy(results)
 
     enriched_results = await metadata_fetcher.get_semantic_results()
-    logger.info("Results enriched with arXiv data.")
+    logger.info(f"Results enriched with arXiv data: {len(enriched_results)}")
 
     return enriched_results
-
-
-if __name__ == "__main__":
-    import uvicorn
-
-    uvicorn.run(app=app, port=8000, host="localhost")
