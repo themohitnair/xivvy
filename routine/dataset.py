@@ -1,4 +1,5 @@
 import os
+import time
 from config import KAGGLE_DATASET_NAME, LOG_CONFIG, KAGGLE_CONFIG_DIR
 import logging.config
 import requests.exceptions
@@ -24,9 +25,12 @@ class DatasetDownloader:
             )
 
     def download(self):
+        start = time.perf_counter()
+        self.logger.info("Starting dataset download...")
         try:
-            self.logger.info("Starting dataset download...")
             self.api.dataset_download_files(self.dataset_name, path="data", unzip=True)
+            elapsed = time.perf_counter() - start
+            self.logger.info(f"Dataset download complete. Time taken: {elapsed:.2f}s")
         except requests.exceptions.RequestException as e:
             self.logger.exception(f"Network/API error occurred: {e}")
         except PermissionError as e:
@@ -37,5 +41,3 @@ class DatasetDownloader:
             self.logger.exception(f"Invalid dataset parameters: {e}")
         except Exception as e:
             self.logger.exception(f"Unexpected error during download: {e}")
-        finally:
-            self.logger.info("Dataset downloaded successfully!")

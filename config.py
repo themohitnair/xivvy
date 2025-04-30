@@ -26,5 +26,28 @@ load_dotenv()
 
 KAGGLE_DATASET_NAME = "Cornell-University/arxiv"
 KAGGLE_CONFIG_DIR = "kaggle/"
-OAI_KEY = os.getenv("OPENAI_API_KEY")
+TGA_KEY = os.getenv("TOGETHERAI_API_KEY")
 CHROMA_COLLECTION_NAME = "arxiv"
+CHROMA_PORT = 6969
+XIVVY_PORT = 8000
+EMB_MODEL = "BAAI/bge-base-en-v1.5"
+BATCH_SIZE = 128
+DATASET_PATH = "data/arxiv-metadata-oai-test.json"
+VALID_CATEGORIES = {
+    "cs",
+    "econ",
+    "eess",
+    "math",
+    "astro-ph",
+    "cond-mat",
+    "gr-qc",
+    "hep",
+    "math-ph",
+    "nucl",
+    "quant-ph",
+    "physics",
+    "q-bio",
+    "q-fin",
+    "stat",
+    "nlin",
+}

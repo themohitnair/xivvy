@@ -4,6 +4,4 @@ __pycache__
 *.json
 data
 kaggle
-qdrant_storage
-last_paper_processed.txt
-if_old_papers_processed.txt
+chroma_data
