@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Dict, Any
 from pydantic import BaseModel
 from enum import Enum
 
@@ -31,6 +31,16 @@ class PaperExtracted(BaseModel):
 
 class PaperToStore(BaseModel):
     id: str
-    embedding: str
+    embedding: List[float]
     categories: List[ArxivDomains]
     date_published: str
+
+
+class SearchResultItem(BaseModel):
+    id: str
+    distance: float
+    metadata: Dict[str, Any]
+
+
+class SearchResults(BaseModel):
+    results: List[SearchResultItem]

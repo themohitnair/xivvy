@@ -14,6 +14,18 @@ class Embedder:
         self.model = EMB_MODEL
         self.logger = logging.getLogger(__name__)
 
+    async def embed_query(self, query: str) -> List[float] | None:
+        try:
+            response = await self.client.embeddings.create(
+                input=[query], model=self.model
+            )
+
+            self.logger.info("Successfully embedded the query.")
+            return response.data[0].embedding
+        except Exception as e:
+            self.logger.error(f"Error embedding batch: {e}")
+            return None
+
     async def embed_batch(self, batch: List[PaperExtracted]) -> List[PaperToStore]:
         try:
             response = await self.client.embeddings.create(
@@ -33,7 +45,7 @@ class Embedder:
                     )
                 )
 
-            self.logger(f"Successfully embedded batch of {len(batch)} papers.")
+            self.logger.info(f"Successfully embedded batch of {len(batch)} papers.")
             return papers_to_store
         except Exception as e:
             self.logger.error(f"Error embedding batch: {e}")

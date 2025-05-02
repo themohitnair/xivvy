@@ -1,23 +1,73 @@
 from process.parse import Parser
+from process.embed import Embedder
+from process.database import Database
 import asyncio
 from config import VALID_CATEGORIES
+from process.utils import wait_for_chroma, run_chroma_server
+import subprocess
+
+# =========== OPTIONAL TOKEN COUNTING ==============
+# ENABLE_TOKEN_COUNTING = True
+# if ENABLE_TOKEN_COUNTING:
+#     import tiktoken
+#     enc = tiktoken.get_encoding("cl100k_base")
+#     total_tokens = 0
+# ===================================================
+
+CHROMA_HOST = "localhost"
+CHROMA_PORT = 8000
 
 
 async def main():
-    parser = Parser()
-    errors = 0
-    categs = set()
-    async for batch in parser.parse_yield_batches():
-        for obj in batch:
-            for category in obj.categories:
-                if category not in VALID_CATEGORIES:
-                    errors += 1
-                categs.add(category.value)
+    # ======== Start Chroma server and wait ========
+    chroma_process = run_chroma_server(port=CHROMA_PORT)
+    try:
+        print("[INFO] Waiting for Chroma server to be ready...")
+        await wait_for_chroma(host=CHROMA_HOST, port=CHROMA_PORT)
+        print("[INFO] Chroma server is up. Starting main pipeline...")
 
-    print(categs)
-    print(errors)
-    print(len(categs))
-    print(len(VALID_CATEGORIES))
+        parser = Parser()
+        database = Database()
+        embedder = Embedder()
+
+        await database.initialize()
+
+        errors = 0
+        categs = set()
+        total_inserted = 0
+        # total_tokens = 0
+
+        async for batch in parser.parse_yield_batches():
+            # ======== TOKEN COUNTING HOOK =========
+            # if ENABLE_TOKEN_COUNTING:
+            #     for paper in batch:
+            #         total_tokens += len(enc.encode(paper.abstract_title))
+            # ======================================
+
+            embedded_batch = await embedder.embed_batch(batch)
+
+            if embedded_batch:
+                await database.insert_batch(embedded_batch)
+                total_inserted += len(embedded_batch)
+
+        print("========================================")
+        print(f"Unique categories found: {categs}")
+        print(f"Invalid categories count: {errors}")
+        print(f"Unique categories count: {len(categs)}")
+        print(f"Valid categories count: {len(VALID_CATEGORIES)}")
+        print(f"Total papers inserted: {total_inserted}")
+
+        # if ENABLE_TOKEN_COUNTING:
+        #     print(f"Total tokens in all papers' content: {total_tokens}")
+        print("========================================")
+
+    finally:
+        print("[INFO] Shutting down Chroma server...")
+        chroma_process.terminate()
+        try:
+            chroma_process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            chroma_process.kill()
 
 
 if __name__ == "__main__":
