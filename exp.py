@@ -1,10 +1,13 @@
+import asyncio
+import subprocess
+
+from config import VALID_CATEGORIES
+
 from process.parse import Parser
 from process.embed import Embedder
 from process.database import Database
-import asyncio
-from config import VALID_CATEGORIES
 from process.utils import wait_for_chroma, run_chroma_server
-import subprocess
+
 
 # =========== OPTIONAL TOKEN COUNTING ==============
 # ENABLE_TOKEN_COUNTING = True
@@ -19,7 +22,6 @@ CHROMA_PORT = 8000
 
 
 async def main():
-    # ======== Start Chroma server and wait ========
     chroma_process = run_chroma_server(port=CHROMA_PORT)
     try:
         print("[INFO] Waiting for Chroma server to be ready...")

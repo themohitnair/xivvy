@@ -1,9 +1,9 @@
+import logging.config
 from typing import List
 from together import AsyncTogether
-from config import TGA_KEY, EMB_MODEL, LOG_CONFIG
-from models import PaperExtracted, PaperToStore
 
-import logging.config
+from models import PaperExtracted, PaperToStore
+from config import TGA_KEY, EMB_MODEL, LOG_CONFIG
 
 logging.config.dictConfig(LOG_CONFIG)
 

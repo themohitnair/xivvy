@@ -1,10 +1,9 @@
-from typing import List
-import chromadb
-from config import CHROMA_PORT, CHROMA_COLLECTION_NAME, LOG_CONFIG
 import logging.config
-from typing import Optional, Dict
+from typing import List, Optional, Dict
+import chromadb
 
 from models import PaperToStore, SearchResults
+from config import CHROMA_PORT, CHROMA_COLLECTION_NAME, LOG_CONFIG
 
 logging.config.dictConfig(LOG_CONFIG)
 

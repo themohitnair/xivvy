@@ -1,10 +1,12 @@
-from typing import List, AsyncIterator
+import re
 import aiofiles
 import orjson
 import logging.config
+from typing import List, AsyncIterator
+
 from config import LOG_CONFIG, DATASET_PATH, BATCH_SIZE, VALID_CATEGORIES
 from models import PaperExtracted
-import re
+
 
 logging.config.dictConfig(LOG_CONFIG)
 

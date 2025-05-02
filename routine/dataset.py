@@ -1,8 +1,9 @@
 import os
 import time
-from config import KAGGLE_DATASET_NAME, LOG_CONFIG, KAGGLE_CONFIG_DIR
 import logging.config
 import requests.exceptions
+
+from config import KAGGLE_DATASET_NAME, LOG_CONFIG, KAGGLE_CONFIG_DIR
 
 os.environ["KAGGLE_CONFIG_DIR"] = KAGGLE_CONFIG_DIR
 
