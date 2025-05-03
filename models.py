@@ -36,6 +36,11 @@ class PaperToStore(BaseModel):
     date_published: str
 
 
+class PaperMetadata(BaseModel):
+    categories: List[str]
+    date_published: str
+
+
 class SearchResultItem(BaseModel):
     id: str
     distance: float

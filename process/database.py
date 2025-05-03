@@ -1,8 +1,8 @@
 import logging.config
-from typing import List, Optional, Dict
+from typing import List
 import chromadb
 
-from models import PaperToStore, SearchResults
+from models import PaperToStore, SearchResults, PaperMetadata
 from config import CHROMA_PORT, CHROMA_COLLECTION_NAME, LOG_CONFIG
 
 logging.config.dictConfig(LOG_CONFIG)
@@ -13,6 +13,7 @@ class Database:
         self.client = None
         self.collection = None
         self.logger = logging.getLogger(__name__)
+        self.collection_name = CHROMA_COLLECTION_NAME
 
     async def initialize(self):
         self.logger.info("Initializing ChromaDB Client...")
@@ -21,7 +22,7 @@ class Database:
 
         self.logger.info("Creating collection if it doesn't exist...")
         self.collection = await self.client.get_or_create_collection(
-            CHROMA_COLLECTION_NAME, metadata={"hnsw:space": "cosine"}
+            self.collection_name, metadata={"hnsw:space": "cosine"}
         )
         self.logger.info("Created collection.")
 
@@ -44,27 +45,34 @@ class Database:
 
         self.logger.info("Batch insert complete.")
 
-    async def search(
-        self,
-        embedding: List[float],
-        top_k: int = 5,
-        filter: Optional[Dict[str, str]] = None,
-    ):
-        self.logger.info(f"Running search (top_k={top_k}, filter={filter})...")
-
+    async def search(self, embedding: list, top_k: int = 5) -> SearchResults:
         results = await self.collection.query(
             query_embeddings=[embedding],
             n_results=top_k,
-            where=filter,
+            include=["metadatas", "distances"],
         )
 
         matches = [
-            {"id": id_, "distance": distance, "metadata": metadata}
+            {
+                "id": id_,
+                "distance": distance,
+                "metadata": PaperMetadata(
+                    categories=[
+                        cat.strip()
+                        for cat in metadata["categories"].split(",")
+                        if cat.strip()
+                    ],
+                    date_published=metadata["date_published"],
+                ),
+            }
             for id_, distance, metadata in zip(
                 results["ids"][0], results["distances"][0], results["metadatas"][0]
             )
         ]
 
-        self.logger.info(f"Search returned {len(matches)} results.")
-
-        return SearchResults(results=matches)
+        return SearchResults(
+            results=[
+                {**match, "metadata": match["metadata"].model_dump()}
+                for match in matches
+            ]
+        )
