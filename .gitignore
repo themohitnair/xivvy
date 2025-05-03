@@ -5,3 +5,4 @@ __pycache__
 data
 kaggle
 chroma_data
+.vscode

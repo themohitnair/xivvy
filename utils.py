@@ -1,6 +1,8 @@
 import asyncio
 import httpx
 import subprocess
+from wonderwords import RandomWord
+import random
 
 
 def run_chroma_server(port: int):
@@ -34,3 +36,11 @@ async def wait_for_chroma(host: str, port: int, timeout: float = 30.0):
         if asyncio.get_event_loop().time() - start > timeout:
             raise TimeoutError(f"Chroma server did not start within {timeout}s")
         await asyncio.sleep(0.5)
+
+
+def random_noun_or_adjective():
+    rw = RandomWord()
+    if random.choice(["noun", "adjective"]) == "noun":
+        return rw.word(include_parts_of_speech=["noun"])
+    else:
+        return rw.word(include_parts_of_speech=["adjective"])

@@ -1,12 +1,14 @@
 import logging.config
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
+from typing import List, Optional
+from datetime import date
 from contextlib import asynccontextmanager
 
 from models import SearchResults
 
 from process.database import Database
 from process.embed import Embedder
-from process.utils import wait_for_chroma, run_chroma_server
+from utils import wait_for_chroma, run_chroma_server, random_noun_or_adjective
 
 from config import XIVVY_PORT, LOG_CONFIG, CHROMA_PORT
 
@@ -40,13 +42,27 @@ app = FastAPI(lifespan=lifespan)
 
 
 @app.get("/", response_model=SearchResults)
-async def search(query: str):
+async def search(
+    query: str | None = None,
+    n: int = 5,
+    categories: Optional[List[str]] = Query(None),
+    start_date: Optional[date] = Query(None),
+    end_date: Optional[date] = Query(None),
+):
+    if not query:
+        query = random_noun_or_adjective()
     embedding = await app.state.embedder.embed_query(query)
-    results = await app.state.db.search(embedding, top_k=5)
+    results = await app.state.db.search(
+        embedding,
+        top_k=n,
+        category_filters=categories,
+        start_date=start_date.isoformat() if start_date else None,
+        end_date=end_date.isoformat() if end_date else None,
+    )
     return results
 
 
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="localhost", port=XIVVY_PORT)
+    uvicorn.run("main:app", host="localhost", port=XIVVY_PORT, reload=True)

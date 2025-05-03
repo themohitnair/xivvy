@@ -4,7 +4,7 @@ import subprocess
 from process.read import Parser
 from process.embed import Embedder
 from process.database import Database
-from process.utils import wait_for_chroma, run_chroma_server
+from utils import wait_for_chroma, run_chroma_server
 
 from config import VALID_CATEGORIES, CHROMA_PORT
 
