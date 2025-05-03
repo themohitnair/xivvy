@@ -6,8 +6,9 @@ from models import SearchResults
 
 from process.database import Database
 from process.embed import Embedder
-from config import XIVVY_PORT, LOG_CONFIG, CHROMA_PORT
 from process.utils import wait_for_chroma, run_chroma_server
+
+from config import XIVVY_PORT, LOG_CONFIG, CHROMA_PORT
 
 logging.config.dictConfig(LOG_CONFIG)
 logger = logging.getLogger(__name__)
