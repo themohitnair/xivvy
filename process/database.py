@@ -1,120 +1,241 @@
 import logging.config
-from typing import List
-import chromadb
+import socket
+from qdrant_client import AsyncQdrantClient, models
+from typing import List, Optional
 
-from models import PaperToStore, SearchResults, PaperMetadata
-from config import CHROMA_PORT, CHROMA_COLLECTION_NAME, LOG_CONFIG
+from config import DB_COLLECTION_NAME, DB_PORT, LOG_CONFIG
+from models import ArxivDomains, StoredPaper, SearchResult, PaperMetadata
+from process.embed import Embedder
+from utils import string_to_uuid, iso_date_to_unix, unix_to_iso
 
 logging.config.dictConfig(LOG_CONFIG)
 
 
-def date_str_to_yyyymmdd_str(date_str: str) -> int:
-    # Convert 'YYYY-MM-DD' to string 'YYYYMMDD'
-    return int(date_str.replace("-", ""))
-
-
 class Database:
-    def __init__(self):
-        self.client = None
-        self.collection = None
+    def __init__(self) -> None:
         self.logger = logging.getLogger(__name__)
-        self.collection_name = CHROMA_COLLECTION_NAME
+        self.client = AsyncQdrantClient(url=f"http://localhost:{DB_PORT}")
+        self.logger.info("Connected to port 6333 (Qdrant Database).")
+        self.collection_name = DB_COLLECTION_NAME
+        self.embedder = Embedder()
 
-    async def initialize(self):
-        self.logger.info("Initializing ChromaDB Client...")
-        self.client = await chromadb.AsyncHttpClient(host="localhost", port=CHROMA_PORT)
-        self.logger.info("ChromaDB Client Initialized.")
+    def is_server_running(self) -> bool:
+        host = "localhost"
+        port = DB_PORT
 
-        self.logger.info("Creating collection if it doesn't exist...")
-        self.collection = await self.client.get_or_create_collection(
-            self.collection_name, metadata={"hnsw:space": "cosine"}
-        )
-        self.logger.info("Created collection.")
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.settimeout(1)
+            try:
+                sock.connect((host, port))
+                self.logger.info(f"Qdrant server is running on {host}:{port}")
+                return True
+            except (ConnectionRefusedError, socket.timeout):
+                self.logger.warning(f"Qdrant server not accessible at {host}:{port}")
+                return False
 
-    async def insert_batch(self, batch: List[PaperToStore]):
-        ids = [paper.id for paper in batch]
-        embeddings = [paper.embedding for paper in batch]
-        metadatas = [
-            {
-                "categories": ",".join(paper.categories),
-                "date_published": date_str_to_yyyymmdd_str(paper.date_published),
-            }
-            for paper in batch
-        ]
+    async def create_collection_if_not_exists(self) -> bool:
+        if not self.is_server_running():
+            self.logger.error("Cannot create collection: Qdrant server is not running")
+            return False
 
-        self.logger.info(f"Inserting batch of {len(batch)} papers into collection...")
-
-        await self.collection.add(ids=ids, embeddings=embeddings, metadatas=metadatas)
-
-        self.logger.info("Batch insert complete.")
-
-    async def search(
-        self,
-        embedding: List,
-        top_k: int = 5,
-        category_filters: List[str] | None = None,
-        start_date: str | None = None,
-        end_date: str | None = None,
-    ) -> SearchResults:
-        filters = []
-
-        if category_filters:
-            if len(category_filters) > 1:
-                category_filter = {
-                    "$or": [
-                        {"categories": {"$in": category.split(",")}}
-                        for category in category_filters
-                    ]
-                }
+        try:
+            collection_exists = await self.client.collection_exists(
+                self.collection_name
+            )
+            if collection_exists:
+                self.logger.info("Collection found.")
+                return True
             else:
-                category_filter = {
-                    "categories": {"$in": category_filters[0].split(",")}
-                }
-            filters.append(category_filter)
+                self.logger.info("Collection not found.")
+                await self.client.create_collection(
+                    collection_name=self.collection_name,
+                    vectors_config=models.VectorParams(
+                        size=768, distance=models.Distance.COSINE
+                    ),
+                )
+                self.logger.info("Created the collection.")
+                return True
+        except Exception as e:
+            self.logger.error(f"Error creating collection: {str(e)}")
+            return False
 
-        if start_date:
-            filters.append(
-                {"date_published": {"$gte": date_str_to_yyyymmdd_str(start_date)}}
+    async def insert_batch(self, batch: List[StoredPaper]) -> bool:
+        if not self.is_server_running():
+            self.logger.error("Cannot insert batch: Qdrant server is not running")
+            return False
+
+        if not batch:
+            self.logger.warning("No papers to insert in batch")
+            return False
+
+        points = []
+        for paper in batch:
+            point = models.PointStruct(
+                id=str(string_to_uuid(paper.paper_id)),
+                payload={
+                    "id": paper.paper_id,
+                    "categories": [cat.value for cat in paper.categories],
+                    "date_updated": iso_date_to_unix(paper.date_updated),
+                },
+                vector=paper.embedding,
             )
-        if end_date:
-            filters.append(
-                {"date_published": {"$lte": date_str_to_yyyymmdd_str(end_date)}}
+            points.append(point)
+
+        try:
+            self.logger.info(f"Inserting batch of {len(points)} papers into collection")
+            await self.client.upsert(
+                collection_name=self.collection_name, points=points
+            )
+            self.logger.info(f"Successfully inserted {len(points)} papers")
+            return True
+        except Exception as e:
+            self.logger.error(f"Error inserting batch: {str(e)}")
+            return False
+
+    async def search_by_id(self, paper_id: str) -> Optional[SearchResult]:
+        if not self.is_server_running():
+            self.logger.error(
+                f"Cannot search for ID {paper_id}: Qdrant server is not running"
+            )
+            return None
+
+        try:
+            id_filter = models.Filter(
+                must=[
+                    models.FieldCondition(
+                        key="id", match=models.MatchValue(value=paper_id)
+                    )
+                ]
             )
 
-        where_filter = None
-        if len(filters) == 1:
-            where_filter = filters[0]
-        elif len(filters) > 1:
-            where_filter = {"$and": filters}
-
-        results = await self.collection.query(
-            query_embeddings=[embedding],
-            n_results=top_k,
-            where=where_filter,
-            include=["metadatas", "distances"],
-        )
-
-        matches = [
-            {
-                "id": id_,
-                "distance": distance,
-                "metadata": PaperMetadata(
-                    categories=[
-                        cat.strip()
-                        for cat in metadata["categories"].split(",")
-                        if cat.strip()
-                    ],
-                    date_published=metadata["date_published"],
-                ),
-            }
-            for id_, distance, metadata in zip(
-                results["ids"][0], results["distances"][0], results["metadatas"][0]
+            results = await self.client.scroll(
+                collection_name=self.collection_name,
+                limit=1,
+                scroll_filter=id_filter,
             )
-        ]
 
-        return SearchResults(
-            results=[
-                {**match, "metadata": match["metadata"].model_dump()}
-                for match in matches
-            ]
-        )
+            if results and results[0]:
+                point = results[0][0]
+                return SearchResult(
+                    distance=0.0,
+                    metadata=PaperMetadata(
+                        paper_id=point.payload.get("id"),
+                        categories=point.payload.get("categories"),
+                        date_updated=unix_to_iso(point.payload.get("date_updated")),
+                    ),
+                )
+            else:
+                self.logger.warning(f"Paper with ID {paper_id} not found")
+                return None
+
+        except Exception as e:
+            self.logger.error(f"Error retrieving paper by ID: {str(e)}")
+            return None
+
+    async def search_by_query(
+        self,
+        query: Optional[str] = None,
+        categories: Optional[List[ArxivDomains]] = None,
+        categories_match_all: bool = False,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None,
+        limit: int = 10,
+    ) -> List[SearchResult]:
+        if not self.is_server_running():
+            self.logger.error(
+                "Cannot perform search query: Qdrant server is not running"
+            )
+            return []
+
+        try:
+            filter_conditions = []
+
+            if categories:
+                category_values = [
+                    cat.value if isinstance(cat, ArxivDomains) else cat
+                    for cat in categories
+                ]
+
+                if categories_match_all:
+                    for category in category_values:
+                        filter_conditions.append(
+                            models.FieldCondition(
+                                key="categories",
+                                match=models.MatchValue(value=category),
+                            )
+                        )
+                else:
+                    filter_conditions.append(
+                        models.FieldCondition(
+                            key="categories", match=models.MatchAny(any=category_values)
+                        )
+                    )
+
+            if date_from:
+                filter_conditions.append(
+                    models.FieldCondition(
+                        key="date_updated",
+                        range=models.Range(gte=iso_date_to_unix(date_from)),
+                    )
+                )
+
+            if date_to:
+                filter_conditions.append(
+                    models.FieldCondition(
+                        key="date_updated",
+                        range=models.Range(lte=iso_date_to_unix(date_to)),
+                    )
+                )
+
+            search_filter = (
+                models.Filter(must=filter_conditions) if filter_conditions else None
+            )
+
+            if not query:
+                results, next_page = await self.client.scroll(
+                    collection_name=self.collection_name,
+                    limit=limit,
+                    scroll_filter=search_filter,
+                )
+
+                search_results = [
+                    SearchResult(
+                        distance=0.0,
+                        metadata=PaperMetadata(
+                            paper_id=point.payload.get("id"),
+                            categories=point.payload.get("categories"),
+                            date_updated=unix_to_iso(point.payload.get("date_updated")),
+                        ),
+                    )
+                    for point in results
+                ]
+            else:
+                query_vector = await self.embedder.embed_query(query)
+                if not query_vector:
+                    self.logger.error("Failed to generate embedding for search query")
+                    return []
+
+                results = await self.client.search(
+                    collection_name=self.collection_name,
+                    query_vector=query_vector,
+                    limit=limit,
+                    query_filter=search_filter,
+                )
+
+                search_results = [
+                    SearchResult(
+                        distance=1.0 - point.score,
+                        metadata=PaperMetadata(
+                            paper_id=point.payload.get("id"),
+                            categories=point.payload.get("categories"),
+                            date_updated=unix_to_iso(point.payload.get("date_updated")),
+                        ),
+                    )
+                    for point in results
+                ]
+
+            return search_results
+
+        except Exception as e:
+            self.logger.error(f"Error during search: {str(e)}")
+            return []

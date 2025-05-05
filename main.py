@@ -1,68 +1,62 @@
 import logging.config
 from fastapi import FastAPI, Query
-from typing import List, Optional
-from datetime import date
 from contextlib import asynccontextmanager
 
-from models import SearchResults
-
+from models import ArxivDomains, SearchResult
+from typing import List, Optional
 from process.database import Database
-from process.embed import Embedder
-from utils import wait_for_chroma, run_chroma_server, random_noun_or_adjective
-
-from config import XIVVY_PORT, LOG_CONFIG, CHROMA_PORT
+from config import LOG_CONFIG, XIVVY_PORT
 
 logging.config.dictConfig(LOG_CONFIG)
-logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("Server starting…")
-    process = run_chroma_server(CHROMA_PORT)
-    logger.info("ChromaDB server subprocess started.")
+    app.state.logger = logging.getLogger(__name__)
 
-    await wait_for_chroma("localhost", CHROMA_PORT)
-    logger.info("ChromaDB HTTP endpoint is up and returning 200 OK.")
-
+    app.state.logger.info("Initializing Database...")
     app.state.db = Database()
-    await app.state.db.initialize()
-    logger.info("Database client and collection ready.")
 
-    app.state.embedder = Embedder()
-    logger.info("Embedder ready.")
+    await app.state.db.create_collection_if_not_exists()
+    app.state.logger.info("Initialized Database.")
 
     yield
 
-    process.terminate()
-    logger.info("ChromaDB server subprocess terminated.")
+
+app = FastAPI(
+    lifespan=lifespan,
+    title="Xivvy Search Engine",
+    description="API for searching ArXiv papers",
+)
 
 
-app = FastAPI(lifespan=lifespan)
-
-
-@app.get("/", response_model=SearchResults)
-async def search(
-    query: str | None = None,
-    n: int = 5,
-    categories: Optional[List[str]] = Query(None),
-    start_date: Optional[date] = Query(None),
-    end_date: Optional[date] = Query(None),
-):
-    if not query:
-        query = random_noun_or_adjective()
-    embedding = await app.state.embedder.embed_query(query)
-    results = await app.state.db.search(
-        embedding,
-        top_k=n,
-        category_filters=categories,
-        start_date=start_date.isoformat() if start_date else None,
-        end_date=end_date.isoformat() if end_date else None,
-    )
+@app.get("/id")
+async def search_by_id(id: str):
+    results = await app.state.db.search_by_id(paper_id=id)
     return results
 
 
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run("main:app", host="localhost", port=XIVVY_PORT, reload=True)
+    uvicorn.run(app="main:app", port=XIVVY_PORT, host="localhost", reload=True)
+
+
+@app.get("/search", response_model=List[SearchResult])
+async def search_papers(
+    query: Optional[str] = None,
+    categories: List[ArxivDomains] = Query(None),
+    categories_match_all: bool = False,  # default OR
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    limit: int = 10,
+):
+    results = await app.state.db.search_by_query(
+        query=query,
+        categories=categories,
+        categories_match_all=categories_match_all,
+        date_from=date_from,
+        date_to=date_to,
+        limit=limit,
+    )
+    return results

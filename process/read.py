@@ -4,7 +4,7 @@ import orjson
 import logging.config
 from typing import List, AsyncIterator
 
-from models import PaperExtracted
+from models import ExtractedPaper
 from config import LOG_CONFIG, DATASET_PATH, BATCH_SIZE, VALID_CATEGORIES
 
 logging.config.dictConfig(LOG_CONFIG)
@@ -60,7 +60,7 @@ class Parser:
 
         return text[:max_chars]
 
-    async def parse_yield_batches(self) -> AsyncIterator[List[PaperExtracted]]:
+    async def parse_yield_batches(self) -> AsyncIterator[List[ExtractedPaper]]:
         batch = []
         async with aiofiles.open(self.file_path) as f:
             async for line in f:
@@ -95,11 +95,11 @@ class Parser:
                     combined_text_raw = f"{title} {abstract}"
                     combined_text = self.sanitize_arxiv_text(combined_text_raw)
 
-                    paper = PaperExtracted(
+                    paper = ExtractedPaper(
                         id=paper_id,
                         abstract_title=combined_text,
                         categories=categories,
-                        date_published=update_date,
+                        date_updated=update_date,
                     )
 
                 except (orjson.JSONDecodeError, KeyError, AttributeError) as e:

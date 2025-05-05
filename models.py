@@ -22,30 +22,32 @@ class ArxivDomains(str, Enum):
     NLIN = "nlin"
 
 
-class PaperExtracted(BaseModel):
+class ExtractedPaper(BaseModel):
     id: str
     abstract_title: str
     categories: List[ArxivDomains]
-    date_published: str
+    date_updated: str
 
 
-class PaperToStore(BaseModel):
-    id: str
+class StoredPaper(BaseModel):
+    paper_id: str
     embedding: List[float]
     categories: List[ArxivDomains]
-    date_published: str
+    date_updated: str
+
+
+class StoredPaperMetadata(BaseModel):
+    paper_id: str
+    categories: List[str]
+    date_updated: int
 
 
 class PaperMetadata(BaseModel):
+    paper_id: str
     categories: List[str]
-    date_published: int
+    date_updated: str
 
 
-class SearchResultItem(BaseModel):
-    id: str
+class SearchResult(BaseModel):
     distance: float
     metadata: PaperMetadata
-
-
-class SearchResults(BaseModel):
-    results: List[SearchResultItem]

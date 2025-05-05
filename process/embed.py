@@ -2,7 +2,7 @@ import logging.config
 from typing import List
 from together import AsyncTogether
 
-from models import PaperExtracted, PaperToStore
+from models import ExtractedPaper, StoredPaper
 from config import TGA_KEY, EMB_MODEL, LOG_CONFIG
 
 logging.config.dictConfig(LOG_CONFIG)
@@ -26,7 +26,7 @@ class Embedder:
             self.logger.error(f"Error embedding batch: {e}")
             return None
 
-    async def embed_batch(self, batch: List[PaperExtracted]) -> List[PaperToStore]:
+    async def embed_batch(self, batch: List[ExtractedPaper]) -> List[StoredPaper]:
         try:
             response = await self.client.embeddings.create(
                 input=[paper.abstract_title for paper in batch], model=self.model
@@ -37,11 +37,11 @@ class Embedder:
             for i, paper in enumerate(batch):
                 embedding = response.data[i].embedding
                 papers_to_store.append(
-                    PaperToStore(
-                        id=paper.id,
+                    StoredPaper(
+                        paper_id=paper.id,
                         embedding=embedding,
                         categories=paper.categories,
-                        date_published=paper.date_published,
+                        date_updated=paper.date_updated,
                     )
                 )
 
