@@ -1,11 +1,12 @@
 import logging.config
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, HTTPException, Query
 from contextlib import asynccontextmanager
 
 from models import ArxivDomains, SearchResult
 from typing import List, Optional
 from process.database import Database
 from config import LOG_CONFIG, XIVVY_PORT
+from utils import iso_date_to_unix
 
 logging.config.dictConfig(LOG_CONFIG)
 
@@ -51,6 +52,13 @@ async def search_papers(
     date_to: Optional[str] = None,
     limit: int = 10,
 ):
+    if date_from and date_to:
+        from_dt = iso_date_to_unix(date_from)
+        to_dt = iso_date_to_unix(date_to)
+        if from_dt > to_dt:
+            raise HTTPException(
+                status_code=400, detail="date_from cannot be later than date_to"
+            )
     results = await app.state.db.search_by_query(
         query=query,
         categories=categories,

@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 from pydantic import BaseModel
 from enum import Enum
 
@@ -49,5 +49,5 @@ class PaperMetadata(BaseModel):
 
 
 class SearchResult(BaseModel):
-    distance: float
+    distance: Optional[float]
     metadata: PaperMetadata

@@ -117,7 +117,7 @@ class Database:
             if results and results[0]:
                 point = results[0][0]
                 return SearchResult(
-                    distance=0.0,
+                    distance=None,
                     metadata=PaperMetadata(
                         paper_id=point.payload.get("id"),
                         categories=point.payload.get("categories"),
@@ -192,7 +192,7 @@ class Database:
             )
 
             if not query:
-                results, next_page = await self.client.scroll(
+                results = await self.client.scroll(
                     collection_name=self.collection_name,
                     limit=limit,
                     scroll_filter=search_filter,
