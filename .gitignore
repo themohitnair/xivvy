@@ -6,3 +6,4 @@ data
 kaggle
 qdrant_storage
 .vscode
+checkpoint.json

@@ -295,14 +295,15 @@ class Database:
 
                     if category_values:  # Only add if we have valid categories
                         if categories_match_all:
-                            # Use must_all for better performance with AND conditions
-                            filter_conditions.append(
-                                models.FieldCondition(
-                                    key="categories",
-                                    match=models.MatchAny(any=category_values),
-                                    must_all=True,
+                            # For match_all, we need to use a different approach
+                            # Create individual must conditions for each category
+                            for cat_value in category_values:
+                                filter_conditions.append(
+                                    models.FieldCondition(
+                                        key="categories",
+                                        match=models.MatchValue(value=cat_value),
+                                    )
                                 )
-                            )
                         else:
                             filter_conditions.append(
                                 models.FieldCondition(
@@ -339,7 +340,7 @@ class Database:
 
             async with self.semaphore:  # Limit concurrent connections
                 if not query:
-                    results, _ = await self.client.scroll(
+                    scroll_response = await self.client.scroll(
                         collection_name=self.collection_name,
                         limit=limit,
                         scroll_filter=search_filter,
@@ -347,19 +348,29 @@ class Database:
                         with_vectors=False,  # Don't need vectors for scrolling
                     )
 
-                    search_results = [
-                        SearchResult(
-                            distance=0.0,
-                            metadata=PaperMetadata(
-                                paper_id=point.payload.get("id"),
-                                categories=point.payload.get("categories"),
-                                date_updated=unix_to_iso(
-                                    point.payload.get("date_updated")
-                                ),
-                            ),
-                        )
-                        for point in results[0]  # Access the points from the tuple
-                    ]
+                    # Properly unpack the scroll response
+                    points, next_page_offset = scroll_response
+
+                    search_results = []
+                    for point in points:
+                        try:
+                            search_results.append(
+                                SearchResult(
+                                    distance=0.0,
+                                    metadata=PaperMetadata(
+                                        paper_id=point.payload.get("id"),
+                                        categories=point.payload.get("categories"),
+                                        date_updated=unix_to_iso(
+                                            point.payload.get("date_updated")
+                                        ),
+                                    ),
+                                )
+                            )
+                        except Exception as e:
+                            self.logger.error(
+                                f"Error processing search result: {str(e)}"
+                            )
+                            # Continue with other results
                 else:
                     query_vector = await self.embedder.embed_query(query)
                     if query_vector is None or getattr(query_vector, "size", 0) == 0:
