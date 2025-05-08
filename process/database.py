@@ -192,7 +192,7 @@ class Database:
             )
 
             if not query:
-                results = await self.client.scroll(
+                results, _ = await self.client.scroll(
                     collection_name=self.collection_name,
                     limit=limit,
                     scroll_filter=search_filter,
