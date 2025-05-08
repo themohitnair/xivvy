@@ -4,5 +4,5 @@ __pycache__
 *.json
 data
 kaggle
-chroma_data
+qdrant_storage
 .vscode

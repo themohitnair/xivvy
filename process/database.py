@@ -1,9 +1,18 @@
 import logging.config
 import socket
+import asyncio
 from qdrant_client import AsyncQdrantClient, models
 from typing import List, Optional
+from cachetools import TTLCache
 
-from config import DB_COLLECTION_NAME, DB_PORT, LOG_CONFIG
+from config import (
+    DB_COLLECTION_NAME,
+    DB_PORT,
+    LOG_CONFIG,
+    CACHE_SIZE,
+    CACHE_TTL,
+    VECTOR_SIZE,
+)
 from models import ArxivDomains, StoredPaper, SearchResult, PaperMetadata
 from process.embed import Embedder
 from utils import string_to_uuid, iso_date_to_unix, unix_to_iso
@@ -14,24 +23,41 @@ logging.config.dictConfig(LOG_CONFIG)
 class Database:
     def __init__(self) -> None:
         self.logger = logging.getLogger(__name__)
-        self.client = AsyncQdrantClient(url=f"http://localhost:{DB_PORT}")
+        self.client = AsyncQdrantClient(
+            url=f"http://localhost:{DB_PORT}",
+            prefer_grpc=True,  # Use gRPC for better performance
+            timeout=10.0,  # Increase timeout for batch operations
+        )
         self.logger.info("Connected to port 6333 (Qdrant Database).")
         self.collection_name = DB_COLLECTION_NAME
         self.embedder = Embedder()
+
+        # Cache for search results
+        self.id_cache = TTLCache(maxsize=CACHE_SIZE, ttl=CACHE_TTL)
+        self.query_cache = TTLCache(maxsize=CACHE_SIZE, ttl=CACHE_TTL)
+
+        # Connection semaphore to limit concurrent connections
+        self.semaphore = asyncio.Semaphore(20)
 
     def is_server_running(self) -> bool:
         host = "localhost"
         port = DB_PORT
 
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-            sock.settimeout(1)
-            try:
-                sock.connect((host, port))
-                self.logger.info(f"Qdrant server is running on {host}:{port}")
-                return True
-            except (ConnectionRefusedError, socket.timeout):
-                self.logger.warning(f"Qdrant server not accessible at {host}:{port}")
-                return False
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                sock.settimeout(1)
+                try:
+                    sock.connect((host, port))
+                    self.logger.info(f"Qdrant server is running on {host}:{port}")
+                    return True
+                except (ConnectionRefusedError, socket.timeout):
+                    self.logger.warning(
+                        f"Qdrant server not accessible at {host}:{port}"
+                    )
+                    return False
+        except Exception as e:
+            self.logger.error(f"Unexpected error checking server status: {str(e)}")
+            return False
 
     async def create_collection_if_not_exists(self) -> bool:
         if not self.is_server_running():
@@ -39,22 +65,41 @@ class Database:
             return False
 
         try:
-            collection_exists = await self.client.collection_exists(
-                self.collection_name
+            # Use a timeout for the collection check
+            collection_exists = await asyncio.wait_for(
+                self.client.collection_exists(self.collection_name), timeout=5.0
             )
+
             if collection_exists:
-                self.logger.info("Collection found.")
+                self.logger.info(f"Collection '{self.collection_name}' found.")
                 return True
             else:
-                self.logger.info("Collection not found.")
-                await self.client.create_collection(
-                    collection_name=self.collection_name,
-                    vectors_config=models.VectorParams(
-                        size=768, distance=models.Distance.COSINE
-                    ),
+                self.logger.info(
+                    f"Collection '{self.collection_name}' not found. Creating..."
                 )
-                self.logger.info("Created the collection.")
-                return True
+                try:
+                    await self.client.create_collection(
+                        collection_name=self.collection_name,
+                        vectors_config=models.VectorParams(
+                            size=VECTOR_SIZE,
+                            distance=models.Distance.COSINE,
+                            on_disk=True,
+                        ),
+                        quantization_config=models.ScalarQuantization(
+                            scalar=models.ScalarQuantizationConfig(
+                                type=models.ScalarType.INT8,
+                                always_ram=True,
+                            ),
+                        ),
+                    )
+                    self.logger.info(f"Created collection '{self.collection_name}'.")
+                    return True
+                except asyncio.TimeoutError:
+                    self.logger.error("Timeout while creating collection")
+                    return False
+        except asyncio.TimeoutError:
+            self.logger.error("Timeout while checking if collection exists")
+            return False
         except Exception as e:
             self.logger.error(f"Error creating collection: {str(e)}")
             return False
@@ -68,9 +113,9 @@ class Database:
             self.logger.warning("No papers to insert in batch")
             return False
 
-        points = []
-        for paper in batch:
-            point = models.PointStruct(
+        # Process points in parallel using list comprehension for better performance
+        points = [
+            models.PointStruct(
                 id=str(string_to_uuid(paper.paper_id)),
                 payload={
                     "id": paper.paper_id,
@@ -79,20 +124,40 @@ class Database:
                 },
                 vector=paper.embedding,
             )
-            points.append(point)
+            for paper in batch
+        ]
 
         try:
-            self.logger.info(f"Inserting batch of {len(points)} papers into collection")
-            await self.client.upsert(
-                collection_name=self.collection_name, points=points
-            )
-            self.logger.info(f"Successfully inserted {len(points)} papers")
-            return True
+            async with self.semaphore:  # Limit concurrent connections
+                self.logger.info(
+                    f"Inserting batch of {len(points)} papers into collection"
+                )
+                await self.client.upsert(
+                    collection_name=self.collection_name,
+                    points=points,
+                    wait=True,  # Ensure data is committed before returning
+                )
+
+                # Clear caches after insert
+                self.id_cache.clear()
+                self.query_cache.clear()
+
+                self.logger.info(f"Successfully inserted {len(points)} papers")
+                return True
         except Exception as e:
             self.logger.error(f"Error inserting batch: {str(e)}")
             return False
 
     async def search_by_id(self, paper_id: str) -> Optional[SearchResult]:
+        if not paper_id:
+            self.logger.error("Cannot search with empty paper_id")
+            return None
+
+        # Check cache first
+        if paper_id in self.id_cache:
+            self.logger.info(f"Cache hit for paper ID: {paper_id}")
+            return self.id_cache[paper_id]
+
         if not self.is_server_running():
             self.logger.error(
                 f"Cannot search for ID {paper_id}: Qdrant server is not running"
@@ -100,6 +165,7 @@ class Database:
             return None
 
         try:
+            # Use a more efficient lookup with optimized filter
             id_filter = models.Filter(
                 must=[
                     models.FieldCondition(
@@ -108,29 +174,77 @@ class Database:
                 ]
             )
 
-            results = await self.client.scroll(
-                collection_name=self.collection_name,
-                limit=1,
-                scroll_filter=id_filter,
-            )
+            try:
+                async with self.semaphore:  # Limit concurrent connections
+                    results = await asyncio.wait_for(
+                        self.client.scroll(
+                            collection_name=self.collection_name,
+                            limit=1,
+                            scroll_filter=id_filter,
+                            with_payload=True,
+                            with_vectors=False,  # Don't need vectors for ID search
+                        ),
+                        timeout=5.0,  # Add timeout to prevent hanging
+                    )
 
-            if results and results[0]:
-                point = results[0][0]
-                return SearchResult(
-                    distance=None,
-                    metadata=PaperMetadata(
-                        paper_id=point.payload.get("id"),
-                        categories=point.payload.get("categories"),
-                        date_updated=unix_to_iso(point.payload.get("date_updated")),
-                    ),
-                )
-            else:
-                self.logger.warning(f"Paper with ID {paper_id} not found")
+                if results and results[0]:
+                    point = results[0][0]
+                    # Validate payload data
+                    if not point.payload or not all(
+                        k in point.payload for k in ["id", "categories", "date_updated"]
+                    ):
+                        self.logger.warning(
+                            f"Incomplete payload for paper ID {paper_id}"
+                        )
+                        return None
+
+                    try:
+                        result = SearchResult(
+                            distance=None,
+                            metadata=PaperMetadata(
+                                paper_id=point.payload.get("id"),
+                                categories=point.payload.get("categories"),
+                                date_updated=unix_to_iso(
+                                    point.payload.get("date_updated")
+                                ),
+                            ),
+                        )
+                        # Cache the result
+                        self.id_cache[paper_id] = result
+                        return result
+                    except Exception as e:
+                        self.logger.error(f"Error creating SearchResult: {str(e)}")
+                        return None
+                else:
+                    self.logger.warning(f"Paper with ID {paper_id} not found")
+                    return None
+            except asyncio.TimeoutError:
+                self.logger.error(f"Timeout while searching for paper ID {paper_id}")
                 return None
 
         except Exception as e:
             self.logger.error(f"Error retrieving paper by ID: {str(e)}")
             return None
+
+    def _create_cache_key(
+        self,
+        query: Optional[str],
+        categories: Optional[List[ArxivDomains]],
+        categories_match_all: bool,
+        date_from: Optional[str],
+        date_to: Optional[str],
+        limit: int,
+    ) -> str:
+        """Create a cache key from search parameters"""
+        cat_str = ",".join(
+            sorted(
+                [
+                    c.value if isinstance(c, ArxivDomains) else c
+                    for c in (categories or [])
+                ]
+            )
+        )
+        return f"{query}:{cat_str}:{categories_match_all}:{date_from}:{date_to}:{limit}"
 
     async def search_by_query(
         self,
@@ -141,6 +255,26 @@ class Database:
         date_to: Optional[str] = None,
         limit: int = 10,
     ) -> List[SearchResult]:
+        # Validate inputs
+        if limit <= 0:
+            self.logger.warning(f"Invalid limit value: {limit}, using default of 10")
+            limit = 10
+        elif limit > 100:
+            self.logger.warning(f"Limit too large: {limit}, capping at 100")
+            limit = 100
+
+        # Check cache first
+        try:
+            cache_key = self._create_cache_key(
+                query, categories, categories_match_all, date_from, date_to, limit
+            )
+            if cache_key in self.query_cache:
+                self.logger.info("Cache hit for query search")
+                return self.query_cache[cache_key]
+        except Exception as e:
+            self.logger.error(f"Error creating cache key: {str(e)}")
+            # Continue with the search even if caching fails
+
         if not self.is_server_running():
             self.logger.error(
                 "Cannot perform search query: Qdrant server is not running"
@@ -148,92 +282,115 @@ class Database:
             return []
 
         try:
+            # Build filter conditions more efficiently
             filter_conditions = []
 
             if categories:
-                category_values = [
-                    cat.value if isinstance(cat, ArxivDomains) else cat
-                    for cat in categories
-                ]
+                try:
+                    category_values = [
+                        cat.value if isinstance(cat, ArxivDomains) else cat
+                        for cat in categories
+                        if cat is not None
+                    ]
 
-                if categories_match_all:
-                    for category in category_values:
-                        filter_conditions.append(
-                            models.FieldCondition(
-                                key="categories",
-                                match=models.MatchValue(value=category),
+                    if category_values:  # Only add if we have valid categories
+                        if categories_match_all:
+                            # Use must_all for better performance with AND conditions
+                            filter_conditions.append(
+                                models.FieldCondition(
+                                    key="categories",
+                                    match=models.MatchAny(any=category_values),
+                                    must_all=True,
+                                )
                             )
-                        )
-                else:
+                        else:
+                            filter_conditions.append(
+                                models.FieldCondition(
+                                    key="categories",
+                                    match=models.MatchAny(any=category_values),
+                                )
+                            )
+                except Exception as e:
+                    self.logger.error(f"Error processing categories: {str(e)}")
+                    # Continue with other filters
+
+            # Combine date filters into a single range condition when possible
+            try:
+                date_range_params = {}
+                if date_from:
+                    date_range_params["gte"] = iso_date_to_unix(date_from)
+                if date_to:
+                    date_range_params["lte"] = iso_date_to_unix(date_to)
+
+                if date_range_params:
                     filter_conditions.append(
                         models.FieldCondition(
-                            key="categories", match=models.MatchAny(any=category_values)
+                            key="date_updated",
+                            range=models.Range(**date_range_params),
                         )
                     )
-
-            if date_from:
-                filter_conditions.append(
-                    models.FieldCondition(
-                        key="date_updated",
-                        range=models.Range(gte=iso_date_to_unix(date_from)),
-                    )
-                )
-
-            if date_to:
-                filter_conditions.append(
-                    models.FieldCondition(
-                        key="date_updated",
-                        range=models.Range(lte=iso_date_to_unix(date_to)),
-                    )
-                )
+            except Exception as e:
+                self.logger.error(f"Error processing date filters: {str(e)}")
+                # Continue with other filters
 
             search_filter = (
                 models.Filter(must=filter_conditions) if filter_conditions else None
             )
 
-            if not query:
-                results, _ = await self.client.scroll(
-                    collection_name=self.collection_name,
-                    limit=limit,
-                    scroll_filter=search_filter,
-                )
-
-                search_results = [
-                    SearchResult(
-                        distance=0.0,
-                        metadata=PaperMetadata(
-                            paper_id=point.payload.get("id"),
-                            categories=point.payload.get("categories"),
-                            date_updated=unix_to_iso(point.payload.get("date_updated")),
-                        ),
+            async with self.semaphore:  # Limit concurrent connections
+                if not query:
+                    results, _ = await self.client.scroll(
+                        collection_name=self.collection_name,
+                        limit=limit,
+                        scroll_filter=search_filter,
+                        with_payload=True,
+                        with_vectors=False,  # Don't need vectors for scrolling
                     )
-                    for point in results
-                ]
-            else:
-                query_vector = await self.embedder.embed_query(query)
-                if not query_vector:
-                    self.logger.error("Failed to generate embedding for search query")
-                    return []
 
-                results = await self.client.search(
-                    collection_name=self.collection_name,
-                    query_vector=query_vector,
-                    limit=limit,
-                    query_filter=search_filter,
-                )
+                    search_results = [
+                        SearchResult(
+                            distance=0.0,
+                            metadata=PaperMetadata(
+                                paper_id=point.payload.get("id"),
+                                categories=point.payload.get("categories"),
+                                date_updated=unix_to_iso(
+                                    point.payload.get("date_updated")
+                                ),
+                            ),
+                        )
+                        for point in results[0]  # Access the points from the tuple
+                    ]
+                else:
+                    query_vector = await self.embedder.embed_query(query)
+                    if query_vector is None or getattr(query_vector, "size", 0) == 0:
+                        self.logger.error(
+                            "Failed to generate embedding for search query"
+                        )
+                        return []
 
-                search_results = [
-                    SearchResult(
-                        distance=1.0 - point.score,
-                        metadata=PaperMetadata(
-                            paper_id=point.payload.get("id"),
-                            categories=point.payload.get("categories"),
-                            date_updated=unix_to_iso(point.payload.get("date_updated")),
-                        ),
+                    results = await self.client.search(
+                        collection_name=self.collection_name,
+                        query_vector=query_vector,
+                        limit=limit,
+                        query_filter=search_filter,
                     )
-                    for point in results
-                ]
 
+                    search_results = [
+                        SearchResult(
+                            distance=1.0 - point.score,
+                            metadata=PaperMetadata(
+                                paper_id=point.payload.get("id"),
+                                categories=point.payload.get("categories"),
+                                date_updated=unix_to_iso(
+                                    point.payload.get("date_updated")
+                                ),
+                            ),
+                        )
+                        for point in results
+                    ]
+
+            # Cache the results before returning
+            self.query_cache[cache_key] = search_results
             return search_results
 
         except Exception as e:

@@ -1,4 +1,3 @@
-import os
 from dotenv import load_dotenv
 
 LOG_CONFIG = {
@@ -26,12 +25,12 @@ load_dotenv()
 
 KAGGLE_DATASET_NAME = "Cornell-University/arxiv"
 KAGGLE_CONFIG_DIR = "kaggle/"
-TGA_KEY = os.getenv("TOGETHERAI_API_KEY")
 DB_COLLECTION_NAME = "arxiv"
 DB_PORT = 6333
 XIVVY_PORT = 7000
-EMB_MODEL = "BAAI/bge-base-en-v1.5"
-BATCH_SIZE = 128
+EMB_MODEL = "sentence-transformers/all-MiniLM-L12-v2"
+BATCH_SIZE = 32
+VECTOR_SIZE = 384
 DATASET_PATH = "data/arxiv-metadata-oai-test.json"
 VALID_CATEGORIES = {
     "cs",
@@ -51,3 +50,7 @@ VALID_CATEGORIES = {
     "stat",
     "nlin",
 }
+
+# Cache configuration
+CACHE_SIZE = 1000  # Maximum number of items to store in cache
+CACHE_TTL = 3600  # Cache time-to-live in seconds (1 hour)
