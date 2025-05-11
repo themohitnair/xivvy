@@ -4,12 +4,12 @@ from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from contextlib import asynccontextmanager
+from typing import List, Optional
 
 from models import ArxivDomains, SearchResult
-from typing import List, Optional
-from process.database import Database
+from services.database import Database
 from config import HOST, LOG_CONFIG, XIVVY_PORT
-from utils import iso_date_to_unix
+from services.utils import iso_date_to_unix
 
 logging.config.dictConfig(LOG_CONFIG)
 
@@ -35,6 +35,7 @@ app = FastAPI(
     # redoc_url=None,
     # openapi_url=None,
 )
+
 
 app.add_middleware(
     CORSMiddleware,
