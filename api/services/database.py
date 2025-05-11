@@ -29,7 +29,6 @@ class Database:
             prefer_grpc=True,
             timeout=10.0,
         )
-        self.logger.info("Connected to port 6333 (Qdrant Database).")
         self.collection_name = DB_COLLECTION_NAME
         self.embedder = Embedder()
 

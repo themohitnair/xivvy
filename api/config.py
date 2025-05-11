@@ -1,4 +1,4 @@
-HOST = "0.0.0.0"
+HOST = "qdr"
 XIVVY_PORT = 7000
 DB_COLLECTION_NAME = "arxiv"
 DB_PORT = 6334

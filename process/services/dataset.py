@@ -26,6 +26,7 @@ class DatasetDownloader:
 
         try:
             self.api.authenticate()
+            self.logger.info("Authenticated successfully.")
         except Exception as e:
             self.logger.error(
                 f"An error ocurred while authenticating using Kaggle Credentials: {e}"
@@ -34,6 +35,13 @@ class DatasetDownloader:
     def download(self):
         start = time.perf_counter()
         self.logger.info("Starting dataset download...")
+
+        # Create data directory if it doesn't exist
+        if not os.path.exists("data"):
+            self.logger.info("Creating data directory...")
+            os.makedirs("data")
+            self.logger.info("Data directory created successfully.")
+
         try:
             self.api.dataset_download_files(self.dataset_name, path="data", unzip=True)
             elapsed = time.perf_counter() - start
