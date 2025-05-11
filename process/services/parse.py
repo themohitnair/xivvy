@@ -312,57 +312,46 @@ class Parser:
         """Parse the dataset file and yield batches of papers"""
         batch = []
         line_buffer = []
-        buffer_size = min(
-            1000, self.batch_size * 2
-        )  # Process multiple lines in parallel
+        buffer_size = min(1000, self.batch_size * 2)
         lines_processed = 0
         papers_extracted = 0
-        skip_until_id = self.last_processed_id  # ID to resume from
+        skip_until_id = self.last_processed_id
         resume_mode = skip_until_id is not None
 
         try:
-            # Check if file exists
             if not os.path.exists(self.file_path):
                 self.logger.error(f"Dataset file not found: {self.file_path}")
-                return  # Empty generator
+                return
 
             try:
                 async with aiofiles.open(self.file_path) as f:
                     async for line in f:
                         lines_processed += 1
 
-                        # Skip processing if in resume mode and need to check ID
                         if resume_mode:
                             try:
                                 obj = orjson.loads(line)
                                 current_id = obj.get("id", "").strip()
 
-                                # Skip until we find the last processed ID
                                 if current_id == skip_until_id:
                                     self.logger.info(
                                         f"Found checkpoint ID: {skip_until_id}. Resuming from next paper."
                                     )
-                                    resume_mode = (
-                                        False  # Found our checkpoint, stop skipping
-                                    )
-                                    continue  # Skip the last processed paper
+                                    resume_mode = False
+                                    continue
                                 elif skip_until_id and current_id:
-                                    continue  # Keep skipping
+                                    continue
                             except Exception as e:
                                 self.logger.warning(
                                     f"Error checking paper ID during resume: {e}"
                                 )
-                                # If we can't parse the line, add it to buffer anyway
                                 resume_mode = False
 
-                        # If we're not skipping, add to buffer
                         if not resume_mode:
                             line_buffer.append(line)
 
-                        # Process buffer in parallel when it reaches the desired size
                         if len(line_buffer) >= buffer_size:
                             try:
-                                # Process lines in parallel with error handling
                                 tasks = [
                                     self._process_line(line) for line in line_buffer
                                 ]
@@ -370,7 +359,6 @@ class Parser:
                                     *tasks, return_exceptions=True
                                 )
 
-                                # Add valid results to batch, handling exceptions
                                 last_id = None
                                 for result in results:
                                     if isinstance(result, Exception):
@@ -379,17 +367,16 @@ class Parser:
                                         )
                                         continue
 
-                                    if result:  # Valid paper
+                                    if result:
                                         papers_extracted += 1
                                         batch.append(result)
-                                        last_id = result.id  # Track the last ID
-                                        # Yield batch when it reaches the desired size
+                                        last_id = result.id
                                         if len(batch) >= self.batch_size:
                                             self.logger.info(
                                                 f"Yielding batch of {len(batch)} papers"
                                             )
                                             yield batch
-                                            # Save checkpoint with the last ID in the batch
+
                                             if last_id:
                                                 await self.save_checkpoint(last_id)
                                             batch = []
@@ -397,19 +384,14 @@ class Parser:
                                 self.logger.error(
                                     f"Error processing batch: {batch_error}"
                                 )
-                                # Continue with next batch rather than failing completely
 
-                            # Clear buffer regardless of success/failure
                             line_buffer = []
-
-                            # Log progress periodically
                             if lines_processed % 10000 == 0:
                                 self.logger.info(
                                     f"Progress: {lines_processed} lines processed, "
                                     f"{papers_extracted} papers extracted"
                                 )
 
-                # Process remaining lines in buffer
                 if line_buffer:
                     try:
                         tasks = [self._process_line(line) for line in line_buffer]
@@ -421,10 +403,10 @@ class Parser:
                                 self.logger.error(f"Error processing line: {result}")
                                 continue
 
-                            if result:  # Valid paper
+                            if result:
                                 papers_extracted += 1
                                 batch.append(result)
-                                last_id = result.id  # Track the last ID
+                                last_id = result.id
                                 if len(batch) >= self.batch_size:
                                     self.logger.info(
                                         f"Yielding batch of {len(batch)} papers"
@@ -438,13 +420,9 @@ class Parser:
                         self.logger.error(
                             f"Error processing final batch: {final_batch_error}"
                         )
-                        # Continue to yield any remaining papers
-
-                # Yield remaining papers in batch
                 if batch:
                     self.logger.info(f"Yielding final batch of {len(batch)} papers")
                     yield batch
-                    # Save final checkpoint with the last paper in the batch
                     if batch and hasattr(batch[-1], "id"):
                         await self.save_checkpoint(batch[-1].id)
 
@@ -457,12 +435,10 @@ class Parser:
                 self.logger.error(f"Error opening dataset file: {file_error}")
         except Exception as e:
             self.logger.error(f"Unexpected error in parse_yield_batches: {e}")
-            # Yield any papers we've already processed
             if batch:
                 self.logger.info(
                     f"Yielding emergency batch of {len(batch)} papers after error"
                 )
                 yield batch
-                # Try to save checkpoint even in error case
                 if batch and hasattr(batch[-1], "id"):
                     await self.save_checkpoint(batch[-1].id)
