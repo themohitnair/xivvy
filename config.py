@@ -29,7 +29,7 @@ DB_COLLECTION_NAME = "arxiv"
 DB_PORT = 6333
 XIVVY_PORT = 7000
 EMB_MODEL = "sentence-transformers/all-MiniLM-L12-v2"
-BATCH_SIZE = 32
+BATCH_SIZE = 128
 VECTOR_SIZE = 384
 DATASET_PATH = "data/arxiv-metadata-oai-test.json"
 VALID_CATEGORIES = {
@@ -51,6 +51,5 @@ VALID_CATEGORIES = {
     "nlin",
 }
 
-# Cache configuration
-CACHE_SIZE = 1000  # Maximum number of items to store in cache
-CACHE_TTL = 3600  # Cache time-to-live in seconds (1 hour)
+CACHE_SIZE = 1000
+CACHE_TTL = 3600

@@ -24,23 +24,21 @@ class Database:
     def __init__(self) -> None:
         self.logger = logging.getLogger(__name__)
         self.client = AsyncQdrantClient(
-            url=f"http://localhost:{DB_PORT}",
-            prefer_grpc=True,  # Use gRPC for better performance
-            timeout=10.0,  # Increase timeout for batch operations
+            url=f"http://qdrant:{DB_PORT}",
+            prefer_grpc=True,
+            timeout=10.0,
         )
         self.logger.info("Connected to port 6333 (Qdrant Database).")
         self.collection_name = DB_COLLECTION_NAME
         self.embedder = Embedder()
 
-        # Cache for search results
         self.id_cache = TTLCache(maxsize=CACHE_SIZE, ttl=CACHE_TTL)
         self.query_cache = TTLCache(maxsize=CACHE_SIZE, ttl=CACHE_TTL)
 
-        # Connection semaphore to limit concurrent connections
         self.semaphore = asyncio.Semaphore(20)
 
     def is_server_running(self) -> bool:
-        host = "localhost"
+        host = "qdrant"
         port = DB_PORT
 
         try:
@@ -65,7 +63,6 @@ class Database:
             return False
 
         try:
-            # Use a timeout for the collection check
             collection_exists = await asyncio.wait_for(
                 self.client.collection_exists(self.collection_name), timeout=5.0
             )
@@ -113,13 +110,14 @@ class Database:
             self.logger.warning("No papers to insert in batch")
             return False
 
-        # Process points in parallel using list comprehension for better performance
         points = [
             models.PointStruct(
                 id=str(string_to_uuid(paper.paper_id)),
                 payload={
                     "id": paper.paper_id,
                     "categories": [cat.value for cat in paper.categories],
+                    "authors": paper.authors,
+                    "title": paper.title,
                     "date_updated": iso_date_to_unix(paper.date_updated),
                 },
                 vector=paper.embedding,
@@ -128,17 +126,16 @@ class Database:
         ]
 
         try:
-            async with self.semaphore:  # Limit concurrent connections
+            async with self.semaphore:
                 self.logger.info(
                     f"Inserting batch of {len(points)} papers into collection"
                 )
                 await self.client.upsert(
                     collection_name=self.collection_name,
                     points=points,
-                    wait=True,  # Ensure data is committed before returning
+                    wait=True,
                 )
 
-                # Clear caches after insert
                 self.id_cache.clear()
                 self.query_cache.clear()
 
@@ -153,7 +150,6 @@ class Database:
             self.logger.error("Cannot search with empty paper_id")
             return None
 
-        # Check cache first
         if paper_id in self.id_cache:
             self.logger.info(f"Cache hit for paper ID: {paper_id}")
             return self.id_cache[paper_id]
@@ -165,7 +161,6 @@ class Database:
             return None
 
         try:
-            # Use a more efficient lookup with optimized filter
             id_filter = models.Filter(
                 must=[
                     models.FieldCondition(
@@ -175,21 +170,20 @@ class Database:
             )
 
             try:
-                async with self.semaphore:  # Limit concurrent connections
+                async with self.semaphore:
                     results = await asyncio.wait_for(
                         self.client.scroll(
                             collection_name=self.collection_name,
                             limit=1,
                             scroll_filter=id_filter,
                             with_payload=True,
-                            with_vectors=False,  # Don't need vectors for ID search
+                            with_vectors=False,
                         ),
-                        timeout=5.0,  # Add timeout to prevent hanging
+                        timeout=5.0,
                     )
 
                 if results and results[0]:
                     point = results[0][0]
-                    # Validate payload data
                     if not point.payload or not all(
                         k in point.payload for k in ["id", "categories", "date_updated"]
                     ):
@@ -199,17 +193,42 @@ class Database:
                         return None
 
                     try:
+                        paper_id = point.payload.get("id")
+                        categories = point.payload.get("categories", [])
+                        date_updated = unix_to_iso(point.payload.get("date_updated"))
+
+                        authors = point.payload.get("authors", ["Unknown"])
+                        if not isinstance(authors, list):
+                            try:
+                                if isinstance(authors, str):
+                                    authors = [
+                                        a.strip()
+                                        for a in authors.split(",")
+                                        if a.strip()
+                                    ]
+                                else:
+                                    authors = [str(authors)]
+                            except Exception:
+                                authors = ["Unknown"]
+                        if not authors:
+                            authors = ["Unknown"]
+
+                        title = point.payload.get("title")
+                        if not title or not isinstance(title, str) or not title.strip():
+                            title = f"Paper {paper_id}"
+                        else:
+                            title = " ".join(title.split())
+
                         result = SearchResult(
                             distance=None,
                             metadata=PaperMetadata(
-                                paper_id=point.payload.get("id"),
-                                categories=point.payload.get("categories"),
-                                date_updated=unix_to_iso(
-                                    point.payload.get("date_updated")
-                                ),
+                                paper_id=paper_id,
+                                categories=categories,
+                                authors=authors,
+                                title=title,
+                                date_updated=date_updated,
                             ),
                         )
-                        # Cache the result
                         self.id_cache[paper_id] = result
                         return result
                     except Exception as e:
@@ -255,7 +274,6 @@ class Database:
         date_to: Optional[str] = None,
         limit: int = 10,
     ) -> List[SearchResult]:
-        # Validate inputs
         if limit <= 0:
             self.logger.warning(f"Invalid limit value: {limit}, using default of 10")
             limit = 10
@@ -263,7 +281,6 @@ class Database:
             self.logger.warning(f"Limit too large: {limit}, capping at 100")
             limit = 100
 
-        # Check cache first
         try:
             cache_key = self._create_cache_key(
                 query, categories, categories_match_all, date_from, date_to, limit
@@ -273,7 +290,6 @@ class Database:
                 return self.query_cache[cache_key]
         except Exception as e:
             self.logger.error(f"Error creating cache key: {str(e)}")
-            # Continue with the search even if caching fails
 
         if not self.is_server_running():
             self.logger.error(
@@ -282,7 +298,6 @@ class Database:
             return []
 
         try:
-            # Build filter conditions more efficiently
             filter_conditions = []
 
             if categories:
@@ -293,10 +308,8 @@ class Database:
                         if cat is not None
                     ]
 
-                    if category_values:  # Only add if we have valid categories
+                    if category_values:
                         if categories_match_all:
-                            # For match_all, we need to use a different approach
-                            # Create individual must conditions for each category
                             for cat_value in category_values:
                                 filter_conditions.append(
                                     models.FieldCondition(
@@ -313,9 +326,7 @@ class Database:
                             )
                 except Exception as e:
                     self.logger.error(f"Error processing categories: {str(e)}")
-                    # Continue with other filters
 
-            # Combine date filters into a single range condition when possible
             try:
                 date_range_params = {}
                 if date_from:
@@ -332,37 +343,51 @@ class Database:
                     )
             except Exception as e:
                 self.logger.error(f"Error processing date filters: {str(e)}")
-                # Continue with other filters
 
             search_filter = (
                 models.Filter(must=filter_conditions) if filter_conditions else None
             )
 
-            async with self.semaphore:  # Limit concurrent connections
+            async with self.semaphore:
                 if not query:
                     scroll_response = await self.client.scroll(
                         collection_name=self.collection_name,
                         limit=limit,
                         scroll_filter=search_filter,
                         with_payload=True,
-                        with_vectors=False,  # Don't need vectors for scrolling
+                        with_vectors=False,
                     )
 
-                    # Properly unpack the scroll response
-                    points, next_page_offset = scroll_response
-
-                    search_results = []
-                    for point in points:
+                    results = []
+                    for point, _ in scroll_response[0]:
                         try:
-                            search_results.append(
+                            if not point.payload or not all(
+                                k in point.payload
+                                for k in ["id", "categories", "date_updated"]
+                            ):
+                                self.logger.warning(
+                                    f"Incomplete payload for paper ID {point.payload.get('id', 'unknown')}"
+                                )
+                                continue
+
+                            paper_id = point.payload.get("id")
+                            categories = point.payload.get("categories", [])
+                            date_updated = unix_to_iso(
+                                point.payload.get("date_updated")
+                            )
+
+                            authors = point.payload.get("authors", ["Unknown"])
+                            title = point.payload.get("title", f"Paper {paper_id}")
+
+                            results.append(
                                 SearchResult(
-                                    distance=0.0,
+                                    distance=None,
                                     metadata=PaperMetadata(
-                                        paper_id=point.payload.get("id"),
-                                        categories=point.payload.get("categories"),
-                                        date_updated=unix_to_iso(
-                                            point.payload.get("date_updated")
-                                        ),
+                                        paper_id=paper_id,
+                                        categories=categories,
+                                        authors=authors,
+                                        title=title,
+                                        date_updated=date_updated,
                                     ),
                                 )
                             )
@@ -370,7 +395,6 @@ class Database:
                             self.logger.error(
                                 f"Error processing search result: {str(e)}"
                             )
-                            # Continue with other results
                 else:
                     query_vector = await self.embedder.embed_query(query)
                     if query_vector is None or getattr(query_vector, "size", 0) == 0:
@@ -379,28 +403,55 @@ class Database:
                         )
                         return []
 
-                    results = await self.client.search(
+                    search_results = await self.client.search(
                         collection_name=self.collection_name,
                         query_vector=query_vector,
                         limit=limit,
                         query_filter=search_filter,
+                        with_payload=True,
                     )
 
-                    search_results = [
-                        SearchResult(
-                            distance=1.0 - point.score,
-                            metadata=PaperMetadata(
-                                paper_id=point.payload.get("id"),
-                                categories=point.payload.get("categories"),
-                                date_updated=unix_to_iso(
-                                    point.payload.get("date_updated")
-                                ),
-                            ),
-                        )
-                        for point in results
-                    ]
+                    results = []
+                    for point in search_results:
+                        try:
+                            if not point.payload or not all(
+                                k in point.payload
+                                for k in ["id", "categories", "date_updated"]
+                            ):
+                                self.logger.warning(
+                                    f"Incomplete payload for paper ID {point.payload.get('id', 'unknown')}"
+                                )
+                                continue
 
-            # Cache the results before returning
+                            paper_id = point.payload.get("id")
+                            categories = point.payload.get("categories", [])
+                            date_updated = unix_to_iso(
+                                point.payload.get("date_updated")
+                            )
+
+                            authors = point.payload.get("authors", ["Unknown"])
+                            title = point.payload.get("title", f"Paper {paper_id}")
+
+                            results.append(
+                                SearchResult(
+                                    distance=1.0 - point.score,
+                                    metadata=PaperMetadata(
+                                        paper_id=paper_id,
+                                        categories=categories,
+                                        authors=authors,
+                                        title=title,
+                                        date_updated=date_updated,
+                                    ),
+                                )
+                            )
+                        except Exception as e:
+                            self.logger.error(
+                                f"Error processing search result: {str(e)}"
+                            )
+                            continue
+
+                    search_results = results
+
             self.query_cache[cache_key] = search_results
             return search_results
 

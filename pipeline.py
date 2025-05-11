@@ -11,6 +11,9 @@ logging.config.dictConfig(LOG_CONFIG)
 logger = logging.getLogger(__name__)
 
 
+# 2545 seconds for 1 Lakh Papers
+
+
 class Pipeline:
     def __init__(self):
         self.parser = Parser()
@@ -40,7 +43,13 @@ class Pipeline:
     async def run(self):
         logger.info("Starting pipeline...")
 
-        await self.database.create_collection_if_not_exists()
+        # Ensure database is ready
+        db_ready = await self.database.create_collection_if_not_exists()
+        if not db_ready:
+            logger.error(
+                "Database collection could not be created or accessed. Aborting pipeline."
+            )
+            return
 
         try:
             async for batch in self.parser.parse_yield_batches():
@@ -50,12 +59,28 @@ class Pipeline:
 
                 if batch:
                     try:
-                        embedded_papers = await self.embedder.embed_batch(batch)
-                        self.stats["papers_embedded"] += len(embedded_papers)
+                        try:
+                            embedded_papers = await asyncio.wait_for(
+                                self.embedder.embed_batch(batch),
+                                timeout=300,
+                            )
+                            self.stats["papers_embedded"] += len(embedded_papers)
 
-                        if embedded_papers:
-                            await self.database.insert_batch(embedded_papers)
-                            self.stats["papers_stored"] += len(embedded_papers)
+                            if embedded_papers:
+                                insert_success = await self.database.insert_batch(
+                                    embedded_papers
+                                )
+                                if insert_success:
+                                    self.stats["papers_stored"] += len(embedded_papers)
+                                else:
+                                    logger.warning(
+                                        f"Failed to insert batch of {len(embedded_papers)} papers"
+                                    )
+                        except asyncio.TimeoutError:
+                            self.stats["errors"] += 1
+                            logger.error(
+                                f"Timeout while processing batch of {batch_size} papers"
+                            )
                     except Exception as e:
                         self.stats["errors"] += 1
                         logger.error(f"Error processing batch: {str(e)}")

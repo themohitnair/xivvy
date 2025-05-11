@@ -21,14 +21,34 @@ class Parser:
         self.batch_size = BATCH_SIZE
         self.valid_categories = VALID_CATEGORIES
 
-        # Checkpoint configuration
+        # Legacy category mapping
+        self.legacy_to_current_mapping = {
+            "acc-phys": "physics",
+            "adap-org": "nlin",
+            "alg-geom": "math",
+            "ao-sci": "physics",
+            "atom-ph": "physics",
+            "bayes-an": "stat",
+            "chao-dyn": "nlin",
+            "chem-ph": "physics",
+            "cmp-lg": "cs",
+            "comp-gas": "physics",
+            "dg-ga": "math",
+            "funct-an": "math",
+            "mtrl-th": "cond-mat",
+            "patt-sol": "nlin",
+            "plasm-ph": "physics",
+            "q-alg": "quant-ph",
+            "solv-int": "nlin",
+            "supr-con": "cond-mat",
+        }
+
         self.checkpoint_file = "checkpoint.json"
         self.last_processed_id = self._load_checkpoint()
         self.logger.info(
             f"Starting from checkpoint ID: {self.last_processed_id or 'Beginning'}"
         )
 
-        # Precompile regex patterns for better performance
         self.latex_patterns = {
             "math_inline": re.compile(r"\$.*?\$"),
             "math_inline2": re.compile(r"\\\((.*?)\\\)"),
@@ -44,7 +64,6 @@ class Parser:
             "latex_commands": re.compile(r"\\[a-zA-Z]+"),
         }
 
-        # Cache for category normalization
         self.category_cache: Dict[str, str] = {}
 
     def _load_checkpoint(self) -> Optional[str]:
@@ -81,16 +100,22 @@ class Parser:
     @lru_cache(maxsize=1000)
     def normalize_category(self, category: str) -> str:
         """Normalize category with caching for better performance"""
-        # Check if already in cache
+
         if category in self.category_cache:
             return self.category_cache[category]
 
-        # Direct match
+        if category in self.legacy_to_current_mapping:
+            mapped_category = self.legacy_to_current_mapping[category]
+            self.category_cache[category] = mapped_category
+            self.logger.debug(
+                f"Mapped legacy category '{category}' to '{mapped_category}'"
+            )
+            return mapped_category
+
         if category in self.valid_categories:
             self.category_cache[category] = category
             return category
 
-        # Prefix match
         for valid_cat in self.valid_categories:
             if category.startswith(valid_cat + ".") or category.startswith(
                 valid_cat + "-"
@@ -98,7 +123,6 @@ class Parser:
                 self.category_cache[category] = valid_cat
                 return valid_cat
 
-        # No match
         self.category_cache[category] = category
         return category
 
@@ -106,7 +130,6 @@ class Parser:
         """Check if a string is in a valid date format (YYYY-MM-DD or similar)"""
         import re
 
-        # Simple regex for YYYY-MM-DD format
         return bool(re.match(r"^\d{4}-\d{2}-\d{2}", date_str))
 
     def sanitize_arxiv_text(self, text: str, max_chars: int = 1500) -> str:
@@ -115,25 +138,19 @@ class Parser:
             return ""
 
         try:
-            # Normalize whitespace once at the beginning
             text = " ".join(text.split())
 
-            # Apply all regex patterns using precompiled patterns with error handling
             for name, pattern in self.latex_patterns.items():
                 try:
                     text = pattern.sub("", text)
                 except Exception as e:
                     self.logger.warning(f"Error applying {name} pattern: {e}")
-                    # Continue with other patterns
 
-            # Final whitespace normalization
             text = " ".join(text.split())
 
-            # Truncate to max_chars
             return text[:max_chars]
         except Exception as e:
             self.logger.error(f"Error in sanitize_arxiv_text: {e}")
-            # Return truncated original text as fallback
             return text[:max_chars] if text else ""
 
     async def _process_line(self, line: str) -> ExtractedPaper | None:
@@ -146,7 +163,6 @@ class Parser:
             return None
 
         try:
-            # Parse JSON with error handling
             try:
                 obj = orjson.loads(line)
                 if not isinstance(obj, dict):
@@ -156,7 +172,6 @@ class Parser:
                 self.logger.error(f"Malformed JSON: {e} - Line: {line[:100]}...")
                 return None
 
-            # Extract and validate fields with defensive programming
             try:
                 paper_id = (
                     obj.get("id", "").strip() if isinstance(obj.get("id"), str) else ""
@@ -166,6 +181,8 @@ class Parser:
                     if isinstance(obj.get("title"), str)
                     else ""
                 )
+                if title:
+                    title = " ".join(title.split())
                 abstract = (
                     (obj.get("abstract") or "").strip()
                     if isinstance(obj.get("abstract"), str)
@@ -181,13 +198,42 @@ class Parser:
                     if isinstance(obj.get("update_date"), str)
                     else ""
                 )
+
+                authors_raw = obj.get("authors", "")
+                authors_parsed = obj.get("authors_parsed", [])
+                authors = []
+
+                if isinstance(authors_parsed, list) and authors_parsed:
+                    try:
+                        authors = [
+                            f"{author[1]} {author[0]}".strip()
+                            if len(author) >= 2
+                            else (author[0] if len(author) >= 1 else "Unknown")
+                            for author in authors_parsed
+                        ]
+                    except Exception as e:
+                        self.logger.warning(
+                            f"Error processing authors_parsed for {paper_id}: {e}"
+                        )
+
+                if not authors and isinstance(authors_raw, str):
+                    authors = [
+                        author.strip()
+                        for author in authors_raw.split(",")
+                        if author.strip()
+                    ]
+                elif not authors and isinstance(authors_raw, list):
+                    authors = [str(author).strip() for author in authors_raw if author]
+
+                if not authors:
+                    authors = ["Unknown"]
+
             except AttributeError as e:
                 self.logger.error(
                     f"Type error in paper fields: {e} - Paper ID: {obj.get('id', 'unknown')}"
                 )
                 return None
 
-            # Validate required fields
             if not paper_id:
                 self.logger.warning(f"Skipping paper with missing ID: {obj}")
                 return None
@@ -198,11 +244,9 @@ class Parser:
                 )
                 return None
 
-            # Process categories with error handling
             categories = []
             try:
                 if categories_raw:
-                    # Use a set for deduplication
                     category_set = set()
                     for cat in categories_raw.split():
                         if cat:
@@ -213,20 +257,16 @@ class Parser:
                                 self.logger.warning(
                                     f"Error normalizing category '{cat}': {cat_error}"
                                 )
-                    # Convert to list and sort
                     categories = sorted(category_set)
             except Exception as cat_error:
                 self.logger.error(
                     f"Error processing categories for {paper_id}: {cat_error}"
                 )
-                # Continue with empty categories rather than failing
 
-            # Combine and sanitize text with error handling
             try:
                 combined_text_raw = f"{title} {abstract}"
                 combined_text = self.sanitize_arxiv_text(combined_text_raw)
 
-                # Ensure we have some text content
                 if not combined_text.strip():
                     self.logger.warning(
                         f"Paper {paper_id} has empty content after sanitization"
@@ -234,23 +274,27 @@ class Parser:
                     combined_text = title or abstract  # Use unsanitized as fallback
             except Exception as text_error:
                 self.logger.error(f"Error sanitizing text for {paper_id}: {text_error}")
-                # Use unsanitized as fallback
                 combined_text = (
                     combined_text_raw[:1500] if combined_text_raw else title or abstract
                 )
 
-            # Validate update date format
             if update_date and not self._is_valid_date_format(update_date):
                 self.logger.warning(
                     f"Invalid date format for paper {paper_id}: {update_date}"
                 )
-                update_date = ""  # Use empty string as fallback
+                update_date = ""
 
-            # Create paper object with try-except
             try:
+                sanitized_abstract = (
+                    self.sanitize_arxiv_text(abstract) if abstract else ""
+                )
+                sanitized_title = self.sanitize_arxiv_text(title) if title else ""
+
                 return ExtractedPaper(
                     id=paper_id,
-                    abstract_title=combined_text,
+                    abstract=sanitized_abstract,
+                    title=sanitized_title,
+                    authors=authors,
                     categories=categories,
                     date_updated=update_date,
                 )
