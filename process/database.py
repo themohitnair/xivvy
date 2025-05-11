@@ -12,6 +12,7 @@ from config import (
     CACHE_SIZE,
     CACHE_TTL,
     VECTOR_SIZE,
+    HOST,
 )
 from models import ArxivDomains, StoredPaper, SearchResult, PaperMetadata
 from process.embed import Embedder
@@ -24,7 +25,7 @@ class Database:
     def __init__(self) -> None:
         self.logger = logging.getLogger(__name__)
         self.client = AsyncQdrantClient(
-            url=f"http://qdrant:{DB_PORT}",
+            url=f"http://{HOST}:{DB_PORT}",
             prefer_grpc=True,
             timeout=10.0,
         )
@@ -38,7 +39,7 @@ class Database:
         self.semaphore = asyncio.Semaphore(20)
 
     def is_server_running(self) -> bool:
-        host = "qdrant"
+        host = HOST
         port = DB_PORT
 
         try:

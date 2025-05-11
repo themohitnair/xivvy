@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from models import ArxivDomains, SearchResult
 from typing import List, Optional
 from process.database import Database
-from config import LOG_CONFIG, XIVVY_PORT
+from config import HOST, LOG_CONFIG, XIVVY_PORT
 from utils import iso_date_to_unix
 
 logging.config.dictConfig(LOG_CONFIG)
@@ -97,7 +97,7 @@ async def search_by_id(id: str, response: Response):
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app="main:app", port=XIVVY_PORT, host="localhost", reload=True)
+    uvicorn.run(app="main:app", port=XIVVY_PORT, host=HOST)
 
 
 @app.get("/search", response_model=List[SearchResult], response_model_exclude_none=True)

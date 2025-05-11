@@ -26,7 +26,8 @@ load_dotenv()
 KAGGLE_DATASET_NAME = "Cornell-University/arxiv"
 KAGGLE_CONFIG_DIR = "kaggle/"
 DB_COLLECTION_NAME = "arxiv"
-DB_PORT = 6333
+DB_PORT = 6334
+HOST = "0.0.0.0"
 XIVVY_PORT = 7000
 EMB_MODEL = "sentence-transformers/all-MiniLM-L12-v2"
 BATCH_SIZE = 128
