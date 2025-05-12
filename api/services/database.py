@@ -46,11 +46,11 @@ class Database:
                 sock.settimeout(1)
                 try:
                     sock.connect((host, port))
-                    self.logger.info(f"Qdrant server is running on {host}:{port}")
+                    self.logger.info(f"Qdrant server is running on {HOST}:{DB_PORT}")
                     return True
                 except (ConnectionRefusedError, socket.timeout):
                     self.logger.warning(
-                        f"Qdrant server not accessible at {host}:{port}"
+                        f"Qdrant server not accessible at {HOST}:{DB_PORT}"
                     )
                     return False
         except Exception as e:
