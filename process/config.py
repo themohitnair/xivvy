@@ -21,7 +21,7 @@ LOG_CONFIG = {
 
 DB_COLLECTION_NAME = "arxiv"
 DB_PORT = 6334
-HOST = "qdr"
+HOST = "0.0.0.0"
 CACHE_SIZE = 1000
 CACHE_TTL = 3600
 VECTOR_SIZE = 384
@@ -30,7 +30,7 @@ KAGGLE_CONFIG_DIR = "kaggle/"
 EMB_MODEL = "sentence-transformers/all-MiniLM-L12-v2"
 BATCH_SIZE = 128
 
-DATASET_PATH = "data/arxiv-metadata-oai-snapshot.json"
+DATASET_PATH = "data/arxiv-metadata-oai-stuff.json"
 VALID_CATEGORIES = {
     "cs",
     "econ",

@@ -36,7 +36,6 @@ class DatasetDownloader:
         start = time.perf_counter()
         self.logger.info("Starting dataset download...")
 
-        # Create data directory if it doesn't exist
         if not os.path.exists("data"):
             self.logger.info("Creating data directory...")
             os.makedirs("data")
@@ -52,8 +51,6 @@ class DatasetDownloader:
             self.logger.exception(f"Permission denied for directory access: {e}")
         except FileNotFoundError as e:
             self.logger.exception(f"Directory path not found: {e}")
-        except ValueError as e:
-            self.logger.exception(f"Invalid dataset parameters: {e}")
         except Exception as e:
             self.logger.exception(f"Unexpected error during download: {e}")
 
@@ -68,7 +65,7 @@ class DatasetDownloader:
         else:
             self.logger.info(f"No previous {json_file_path} found.")
 
-        DatasetDownloader().download()
+        self.download()
         total_elapsed_time = time.perf_counter() - total_start_time
         self.logger.info(
             f"\nTotal operation completed in {total_elapsed_time:.2f} seconds."
