@@ -9,7 +9,13 @@ from functools import lru_cache
 from typing import List, AsyncIterator, Dict, Optional
 
 from models import ExtractedPaper
-from config import LOG_CONFIG, DATASET_PATH, BATCH_SIZE, VALID_CATEGORIES
+from config import (
+    LOG_CONFIG,
+    DATASET_PATH,
+    BATCH_SIZE,
+    VALID_CATEGORIES,
+    CHECKPOINT_FILE,
+)
 
 logging.config.dictConfig(LOG_CONFIG)
 
@@ -43,7 +49,7 @@ class Parser:
             "supr-con": "cond-mat",
         }
 
-        self.checkpoint_file = "checkpoint.json"
+        self.checkpoint_file = CHECKPOINT_FILE
         self.last_processed_id = self._load_checkpoint()
         self.logger.info(
             f"Starting from checkpoint ID: {self.last_processed_id or 'Beginning'}"

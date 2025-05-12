@@ -1,9 +1,16 @@
 import os
 import time
 import logging.config
+import json
+from datetime import datetime, timedelta
 import requests.exceptions
 
-from config import KAGGLE_DATASET_NAME, LOG_CONFIG, KAGGLE_CONFIG_DIR
+from config import (
+    KAGGLE_DATASET_NAME,
+    LOG_CONFIG,
+    KAGGLE_CONFIG_DIR,
+    LAST_DOWNLOAD_FILE,
+)
 
 os.environ["KAGGLE_CONFIG_DIR"] = KAGGLE_CONFIG_DIR
 
@@ -23,14 +30,46 @@ class DatasetDownloader:
         self.api = KaggleApi()
         self.dataset_name = KAGGLE_DATASET_NAME
         self.logger = logging.getLogger(__name__)
-
+        self.timestamp_file = LAST_DOWNLOAD_FILE
         try:
             self.api.authenticate()
             self.logger.info("Authenticated successfully.")
         except Exception as e:
             self.logger.error(
-                f"An error ocurred while authenticating using Kaggle Credentials: {e}"
+                f"An error occurred while authenticating using Kaggle Credentials: {e}"
             )
+
+    def _save_download_time(self):
+        timestamp = datetime.utcnow().isoformat()
+        with open(self.timestamp_file, "w") as f:
+            json.dump({"last_download": timestamp}, f)
+        self.logger.info(f"Saved last download timestamp: {timestamp}")
+
+    def _is_download_needed(self):
+        if not os.path.exists(self.timestamp_file):
+            self.logger.info(
+                "No previous download timestamp found. Proceeding to download."
+            )
+            return True
+
+        with open(self.timestamp_file, "r") as f:
+            data = json.load(f)
+            last_download_str = data.get("last_download")
+
+        try:
+            last_download_time = datetime.fromisoformat(last_download_str)
+        except (TypeError, ValueError):
+            self.logger.warning("Corrupted timestamp file. Proceeding to download.")
+            return True
+
+        if datetime.utcnow() - last_download_time > timedelta(days=7):
+            self.logger.info(
+                "Last download was over 7 days ago. Proceeding to download."
+            )
+            return True
+        else:
+            self.logger.info("Dataset is up-to-date. No download needed.")
+            return False
 
     def download(self):
         start = time.perf_counter()
@@ -45,6 +84,7 @@ class DatasetDownloader:
             self.api.dataset_download_files(self.dataset_name, path="data", unzip=True)
             elapsed = time.perf_counter() - start
             self.logger.info(f"Dataset download complete. Time taken: {elapsed:.2f}s")
+            self._save_download_time()
         except requests.exceptions.RequestException as e:
             self.logger.exception(f"Network/API error occurred: {e}")
         except PermissionError as e:
@@ -57,15 +97,19 @@ class DatasetDownloader:
     def run(self):
         total_start_time = time.perf_counter()
 
-        json_file_path = os.path.join("data", "arxiv-metadata-oai-snapshot.json")
-        if os.path.exists(json_file_path):
-            self.logger.info(f"Removing previous {json_file_path}...")
-            os.remove(json_file_path)
-            self.logger.info(f"Previous {json_file_path} removed successfully.")
-        else:
-            self.logger.info(f"No previous {json_file_path} found.")
+        if self._is_download_needed():
+            json_file_path = os.path.join("data", "arxiv-metadata-oai-snapshot.json")
+            if os.path.exists(json_file_path):
+                self.logger.info(f"Removing previous {json_file_path}...")
+                os.remove(json_file_path)
+                self.logger.info(f"Previous {json_file_path} removed successfully.")
+            else:
+                self.logger.info(f"No previous {json_file_path} found.")
 
-        self.download()
+            self.download()
+        else:
+            self.logger.info("Skipping download process.")
+
         total_elapsed_time = time.perf_counter() - total_start_time
         self.logger.info(
             f"\nTotal operation completed in {total_elapsed_time:.2f} seconds."

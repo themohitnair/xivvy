@@ -1,0 +1,12 @@
+version: "3.8"
+
+services:
+  dataset_downloader:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ./data:/process/data
+      - ./kaggle:/root/.kaggle
+    network_mode: "host"
+    restart: unless-stopped

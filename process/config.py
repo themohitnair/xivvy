@@ -29,8 +29,11 @@ KAGGLE_DATASET_NAME = "Cornell-University/arxiv"
 KAGGLE_CONFIG_DIR = "kaggle/"
 EMB_MODEL = "sentence-transformers/all-MiniLM-L12-v2"
 BATCH_SIZE = 128
+CHECKPOINT_FILE = "data/checkpoint.json"
+LAST_DOWNLOAD_FILE = "data/last_download.json"
 
-DATASET_PATH = "data/arxiv-metadata-oai-stuff.json"
+
+DATASET_PATH = "data/arxiv-metadata-oai-snapshot.json"
 VALID_CATEGORIES = {
     "cs",
     "econ",
