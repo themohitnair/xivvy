@@ -306,7 +306,7 @@ class Database:
 
             async with self.semaphore:
                 if not query:
-                    scroll_response = await self.client.scroll(
+                    points, next_cursor = await self.client.scroll(
                         collection_name=self.collection_name,
                         limit=limit,
                         scroll_filter=search_filter,
@@ -314,8 +314,8 @@ class Database:
                         with_vectors=False,
                     )
 
-                    results = []
-                    for point, _ in scroll_response[0]:
+                    search_results = []
+                    for point in points:
                         try:
                             if not point.payload or not all(
                                 k in point.payload
@@ -335,7 +335,7 @@ class Database:
                             authors = point.payload.get("authors", ["Unknown"])
                             title = point.payload.get("title", f"Paper {paper_id}")
 
-                            results.append(
+                            search_results.append(
                                 SearchResult(
                                     distance=None,
                                     metadata=PaperMetadata(
