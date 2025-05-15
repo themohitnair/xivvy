@@ -27,7 +27,7 @@ class Database:
         self.client = AsyncQdrantClient(
             url=f"http://{HOST}:{DB_PORT}",
             prefer_grpc=True,
-            timeout=10.0,
+            timeout=30.0,
         )
         self.collection_name = DB_COLLECTION_NAME
         self.embedder = Embedder()
