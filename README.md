@@ -1,6 +1,4 @@
-# xivvy
-
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/themohitnair/xivvy)
+# xivvy [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/themohitnair/xivvy)
 
 An open-source arXiv Semantic Search engine.
 
@@ -12,3 +10,5 @@ An open-source arXiv Semantic Search engine.
 - Kaggle API
 
 The project is currently hosted on Google Cloud Compute Engine. The arXiv metadataset is acquired from the Kaggle API, and embedded with light-embed in batches. The vectors are then stored in Qdrant.
+
+Used in [densAIr](https://densair.vercel.app) - [densAIr repository](https://github.com/themohitnair/densair)
